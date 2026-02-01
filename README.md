@@ -3,8 +3,8 @@
 ## Quick Start
 1. Build and flash with PlatformIO (see `platformio.ini`).
 2. On first boot, the device starts an AP named `BattBrrr-<MAC>`.
-3. Connect to the AP and open `http://192.168.4.1/wifisetup`.
-4. Configure Wi-Fi, then open `http://<device-ip>/config`.
+3. Connect to the AP and open `http://192.168.4.1/`.
+4. Configure Wi-Fi, then open `http://<device-ip>/` and configure your setup.
 5. Set OneWire pin, heater output pin, targets, and safety limits.
 6. Assign sensor roles (battery_primary is required).
 
@@ -63,5 +63,6 @@ Configured via UI:
 ## Notes
 - No blocking `delay()` loops.
 - Safety always wins: faults disable output until reset and safe.
+
 
 

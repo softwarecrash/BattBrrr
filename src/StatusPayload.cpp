@@ -87,6 +87,7 @@ String buildStatusJson(const StatusContext& ctx) {
     } else {
       controller["control_temp_c"] = nullptr;
     }
+    controller["control_temp_stale"] = ctx.heater->controlTempStale();
     controller["using_bms"] = ctx.heater->usingBmsFallback();
     const HeaterController::InputState inputs = ctx.heater->inputState();
     JsonObject input = controller["inputs"].to<JsonObject>();

@@ -233,6 +233,8 @@
 
     let currentEnabled = false;
     let currentMode = "IDLE";
+    let lastControlTemp = null;
+    let lastControlTempTs = 0;
 
     async function loadStatus() {
       try {
@@ -254,10 +256,21 @@
         document.getElementById("targetValue").textContent = Number.isFinite(targetC) ? targetC.toFixed(2) + " C" : "--";
         document.getElementById("outputValue").textContent = (ctrl.output_pct != null) ? Number(ctrl.output_pct).toFixed(1) + " %" : "--";
 
-        const controlTemp = (ctrl.control_temp_c != null) ? Number(ctrl.control_temp_c) : NaN;
+        const nowTs = Date.now();
+        let controlTemp = (ctrl.control_temp_c != null) ? Number(ctrl.control_temp_c) : NaN;
+        const backendStale = !!ctrl.control_temp_stale;
+        let held = false;
+        if (Number.isFinite(controlTemp)) {
+          lastControlTemp = controlTemp;
+          lastControlTempTs = nowTs;
+        } else if (lastControlTemp != null && (nowTs - lastControlTempTs) < 10000) {
+          controlTemp = lastControlTemp;
+          held = true;
+        }
         const controlClass = tempToClass(controlTemp, targetC, hasFault);
         const controlTempEl = document.getElementById("controlTempValue");
-        controlTempEl.textContent = Number.isFinite(controlTemp) ? controlTemp.toFixed(2) + " C" : "--";
+        const showStale = backendStale || held;
+        controlTempEl.textContent = Number.isFinite(controlTemp) ? controlTemp.toFixed(2) + " C" + (showStale ? " ~" : "") : "--";
         controlTempEl.className = "kv-val " + controlClass;
 
         document.getElementById("sourceValue").textContent = ctrl.using_bms ? "BMS" : "DS18B20";

@@ -34,6 +34,7 @@ public:
   bool usingBmsFallback() const;
   float controlTempC() const;
   bool controlTempValid() const;
+  bool controlTempStale() const;
 
   uint32_t faultMaskLatched() const;
   uint32_t faultMaskActive() const;
@@ -149,6 +150,9 @@ private:
   bool _usingBmsFallback;
   float _controlTempC;
   bool _controlTempValid;
+  bool _controlTempStale;
+  float _lastGoodControlTempC;
+  uint32_t _lastGoodControlTempMs;
   bool _lastModeInputActive;
 
   float _pidIntegral;

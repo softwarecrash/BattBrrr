@@ -23,6 +23,9 @@ HeaterController::HeaterController()
     _usingBmsFallback(false),
     _controlTempC(NAN),
     _controlTempValid(false),
+    _controlTempStale(false),
+    _lastGoodControlTempC(NAN),
+    _lastGoodControlTempMs(0),
     _lastModeInputActive(false),
     _pidIntegral(0.0f),
     _pidLastError(0.0f),
@@ -60,6 +63,9 @@ void HeaterController::begin(Settings& settings) {
   _bootMs = millis();
   _hadValidPrimary = false;
   _primaryInvalidSinceMs = 0;
+  _lastGoodControlTempC = NAN;
+  _lastGoodControlTempMs = 0;
+  _controlTempStale = false;
   applySettings(settings);
   configureOutput();
 }
@@ -364,6 +370,7 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
   _usingBmsFallback = false;
   _controlTempValid = false;
   _controlTempC = NAN;
+  _controlTempStale = false;
 
   bool primaryValid = false;
   float primaryTemp = NAN;
@@ -374,13 +381,26 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
     _controlTempC = primaryTemp;
     _hadValidPrimary = true;
     _primaryInvalidSinceMs = 0;
+    _lastGoodControlTempC = primaryTemp;
+    _lastGoodControlTempMs = nowMs;
   } else if (_cfg.bmsFallback && mqtt.bmsTempValid(nowMs)) {
     _controlTempValid = true;
     _controlTempC = mqtt.bmsTempC();
     _usingBmsFallback = true;
     _primaryInvalidSinceMs = 0;
+    _lastGoodControlTempC = _controlTempC;
+    _lastGoodControlTempMs = nowMs;
   } else {
     if (_primaryInvalidSinceMs == 0) _primaryInvalidSinceMs = nowMs;
+  }
+
+  if (!_controlTempValid) {
+    const uint32_t holdMs = 8000;
+    if (_lastGoodControlTempMs != 0 && (nowMs - _lastGoodControlTempMs) <= holdMs) {
+      _controlTempValid = true;
+      _controlTempC = _lastGoodControlTempC;
+      _controlTempStale = true;
+    }
   }
 
   if (!_controlTempValid) {
@@ -605,6 +625,10 @@ float HeaterController::controlTempC() const {
 
 bool HeaterController::controlTempValid() const {
   return _controlTempValid;
+}
+
+bool HeaterController::controlTempStale() const {
+  return _controlTempStale;
 }
 
 uint32_t HeaterController::faultMaskLatched() const {

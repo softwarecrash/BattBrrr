@@ -1,12 +1,36 @@
 #include "SettingsPrefs.h"
 #include "SettingsPrefs.schema.h"
 
+#include <cstring>
+
 // ---------- SettingsGetter / SettingsSetter ctors ----------
 
 SettingsGetter::SettingsGetter(Settings &outer) : _outer(outer) {}
 SettingsSetter::SettingsSetter(Settings &outer) : _outer(outer) {}
 
 // ---------- Settings core ----------
+
+namespace {
+constexpr size_t kNvsKeyMaxLen = 15;
+
+uint32_t fnv1a32(const char* s) {
+  uint32_t h = 2166136261u;
+  while (*s) {
+    h ^= static_cast<uint8_t>(*s++);
+    h *= 16777619u;
+  }
+  return h;
+}
+
+String nvsKey(const char* name) {
+  if (!name) return String();
+  if (strlen(name) <= kNvsKeyMaxLen) return String(name);
+  const uint32_t h = fnv1a32(name);
+  char buf[10];
+  snprintf(buf, sizeof(buf), "k%08lx", static_cast<unsigned long>(h));
+  return String(buf);
+}
+}  // namespace
 
 Settings::Settings()
   : get(*this),
@@ -35,7 +59,8 @@ void Settings::loadFromNvs() {
   #define LOAD_BOOL(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, true); \
-    bool v = prefs.getBool(name, def); \
+    String key = nvsKey(name); \
+    bool v = prefs.getBool(key.c_str(), def); \
     prefs.end(); \
     _doc[group][name] = v; \
   }
@@ -43,7 +68,8 @@ void Settings::loadFromNvs() {
   #define LOAD_INT32(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, true); \
-    int32_t v = prefs.getInt(name, def); \
+    String key = nvsKey(name); \
+    int32_t v = prefs.getInt(key.c_str(), def); \
     prefs.end(); \
     if (v < (minv)) v = (minv); \
     if (v > (maxv)) v = (maxv); \
@@ -53,7 +79,8 @@ void Settings::loadFromNvs() {
   #define LOAD_UINT16(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, true); \
-    uint16_t v = prefs.getUShort(name, (uint16_t)def); \
+    String key = nvsKey(name); \
+    uint16_t v = prefs.getUShort(key.c_str(), (uint16_t)def); \
     prefs.end(); \
     if (v < (uint16_t)(minv)) v = (uint16_t)(minv); \
     if (v > (uint16_t)(maxv)) v = (uint16_t)(maxv); \
@@ -63,7 +90,8 @@ void Settings::loadFromNvs() {
   #define LOAD_UINT32(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, true); \
-    uint32_t v = prefs.getUInt(name, (uint32_t)def); \
+    String key = nvsKey(name); \
+    uint32_t v = prefs.getUInt(key.c_str(), (uint32_t)def); \
     prefs.end(); \
     if (v < (uint32_t)(minv)) v = (uint32_t)(minv); \
     if (v > (uint32_t)(maxv)) v = (uint32_t)(maxv); \
@@ -73,7 +101,8 @@ void Settings::loadFromNvs() {
   #define LOAD_FLOAT(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, true); \
-    float v = prefs.getFloat(name, (float)def); \
+    String key = nvsKey(name); \
+    float v = prefs.getFloat(key.c_str(), (float)def); \
     prefs.end(); \
     if (v < (float)(minv)) v = (float)(minv); \
     if (v > (float)(maxv)) v = (float)(maxv); \
@@ -83,7 +112,8 @@ void Settings::loadFromNvs() {
   #define LOAD_STRING(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, true); \
-    String s = prefs.getString(name, def); \
+    String key = nvsKey(name); \
+    String s = prefs.getString(key.c_str(), def); \
     prefs.end(); \
     _doc[group][name] = s; \
   }
@@ -108,56 +138,62 @@ void Settings::writeToNvs() {
   #define SAVE_BOOL(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, false); \
+    String key = nvsKey(name); \
     bool v = _doc[group][name] | def; \
-    prefs.putBool(name, v); \
+    prefs.putBool(key.c_str(), v); \
     prefs.end(); \
   }
 
   #define SAVE_INT32(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, false); \
+    String key = nvsKey(name); \
     int32_t v = _doc[group][name] | def; \
     if (v < (minv)) v = (minv); \
     if (v > (maxv)) v = (maxv); \
-    prefs.putInt(name, v); \
+    prefs.putInt(key.c_str(), v); \
     prefs.end(); \
   }
 
   #define SAVE_UINT16(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, false); \
+    String key = nvsKey(name); \
     uint16_t v = (uint16_t)(_doc[group][name] | def); \
     if (v < (uint16_t)(minv)) v = (uint16_t)(minv); \
     if (v > (uint16_t)(maxv)) v = (uint16_t)(maxv); \
-    prefs.putUShort(name, v); \
+    prefs.putUShort(key.c_str(), v); \
     prefs.end(); \
   }
 
   #define SAVE_UINT32(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, false); \
+    String key = nvsKey(name); \
     uint32_t v = (uint32_t)(_doc[group][name] | def); \
     if (v < (uint32_t)(minv)) v = (uint32_t)(minv); \
     if (v > (uint32_t)(maxv)) v = (uint32_t)(maxv); \
-    prefs.putUInt(name, v); \
+    prefs.putUInt(key.c_str(), v); \
     prefs.end(); \
   }
 
   #define SAVE_FLOAT(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, false); \
+    String key = nvsKey(name); \
     float v = (float)(_doc[group][name] | def); \
     if (v < (float)(minv)) v = (float)(minv); \
     if (v > (float)(maxv)) v = (float)(maxv); \
-    prefs.putFloat(name, v); \
+    prefs.putFloat(key.c_str(), v); \
     prefs.end(); \
   }
 
   #define SAVE_STRING(group, name, api, def, minv, maxv) \
   { \
     prefs.begin(group, false); \
+    String key = nvsKey(name); \
     String s = _doc[group][name] | def; \
-    prefs.putString(name, s); \
+    prefs.putString(key.c_str(), s); \
     prefs.end(); \
   }
 

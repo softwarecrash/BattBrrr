@@ -412,10 +412,9 @@
       </div>
 
       <div class="button-stack actions">
-        <button type="submit" class="btn">Save</button>
+        <button type="submit" class="btn" id="saveBtn">Save</button>
         <button type="button" class="btn btn-outline" onclick="location.href='/'">Back</button>
       </div>
-      <div class="inline-info" id="saveStatus">--</div>
     </form>
   </div>
 
@@ -492,11 +491,17 @@
     function collectSensors() {
       const out = [];
       document.querySelectorAll("#sensorConfigList .sensor-item").forEach(row => {
+        const nameEl = row.querySelector(".sensor-name-input");
+        const roleEl = row.querySelector(".sensor-role-input");
+        const offsetEl = row.querySelector(".sensor-offset-input");
+        if (!nameEl || !roleEl || !offsetEl || !row.dataset.id) {
+          return;
+        }
         out.push({
           id: row.dataset.id,
-          name: row.querySelector(".sensor-name-input").value.trim(),
-          role: row.querySelector(".sensor-role-input").value,
-          offset_c: parseFloat(row.querySelector(".sensor-offset-input").value || "0")
+          name: nameEl.value.trim(),
+          role: roleEl.value,
+          offset_c: parseFloat(offsetEl.value || "0")
         });
       });
       return out;
@@ -652,8 +657,10 @@
 
     document.getElementById("configForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const saveStatus = document.getElementById("saveStatus");
-      saveStatus.textContent = "Saving...";
+      const saveBtn = document.getElementById("saveBtn");
+      const originalLabel = saveBtn.textContent;
+      saveBtn.textContent = "Saving...";
+      saveBtn.disabled = true;
       const payload = {
         deviceName: document.getElementById("deviceName").value.trim(),
         enabled: document.getElementById("enabled").value === "1",
@@ -747,14 +754,19 @@
         });
         if (res.ok) {
           alertToast("success", "Configuration saved.");
-          saveStatus.textContent = "Saved.";
+          saveBtn.textContent = "Saved";
         } else {
           alertToast("error", "Save failed.");
-          saveStatus.textContent = "Save failed.";
+          saveBtn.textContent = "Save failed";
         }
       } catch {
         alertToast("error", "Save request failed.");
-        saveStatus.textContent = "Save request failed.";
+        saveBtn.textContent = "Save failed";
+      } finally {
+        setTimeout(() => {
+          saveBtn.textContent = originalLabel;
+          saveBtn.disabled = false;
+        }, 1800);
       }
     });
 

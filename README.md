@@ -1,9 +1,5 @@
 # BattBrrr (ESP32 + MQTT)
 
-Production-ready battery heater controller for ESP32 (Arduino framework).
-Includes DS18B20 sensor management, PID or hysteresis control, safety layer,
-Wi-Fi/AP setup, Web UI, OTA, and MQTT integration.
-
 ## Quick Start
 1. Build and flash with PlatformIO (see `platformio.ini`).
 2. On first boot, the device starts an AP named `BattBrrr-<MAC>`.
@@ -64,20 +60,7 @@ Configured via UI:
 - Optional JSON paths (dot notation): `bmsStatePath`, `bmsTempPath`
 - Timeout: `bmsTimeoutS`
 
-## GitHub OTA Configuration
-GitHub OTA uses a build-time URL (no UI settings). Set it in `platformio.ini`:
-- `OTA_GH_RELEASE_URL` -> GitHub API release endpoint
-- Optional: `OTA_GH_ASSET_PATTERN` (default `*.bin`)
-
-Example:
-- `https://api.github.com/repos/<owner>/<repo>/releases/latest`
-
-## Build
-Use PlatformIO:
-```
-pio run -e esp32c3
-```
-
 ## Notes
 - No blocking `delay()` loops.
 - Safety always wins: faults disable output until reset and safe.
+

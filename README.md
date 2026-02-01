@@ -1,43 +1,68 @@
-# BattBrrr (battery Heating Controller)
+# BattBrrr (Battery Heater Controller)
+
+## Features
+- DS18B20 scanning, roles, offsets, and error tracking (primary/secondary/ambient)
+- PID or hysteresis control with min on/off protection
+- Fully-configurable GPIO mapping (outputs + optional inputs)
+- Safety layer with hard cutoffs, plausibility checks, stuck-on detection, and thermal runaway protection
+- MQTT status/events and command topics (plus BMS mode/temperature inputs)
+- Web UI for status, configuration, tools, and OTA
+- Manual OTA upload + GitHub OTA release updater
+- PID Autotune (minutes-scale, non-blocking, conservative by default)
+- No blocking delay loops
+
+## Hardware
+- ESP32 (tested on Wemos D1 mini ESP32)
+- 1..N DS18B20 sensors on a single OneWire pin
+- Heater output: PWM or windowed (relay/SSR)
+- Optional inputs: enable/mode/manual override
 
 ## Quick Start
-1. Build and flash with PlatformIO (see `platformio.ini`).
+1. Build and flash with PlatformIO (see Build section).
 2. On first boot, the device starts an AP named `BattBrrr-<MAC>`.
 3. Connect to the AP and open `http://192.168.4.1/`.
-4. Configure Wi-Fi, then open `http://<device-ip>/` and configure your setup.
-5. Set OneWire pin, heater output pin, targets, and safety limits.
+4. Configure Wi-Fi, then open `http://<device-ip>/`.
+5. Set OneWire pin, heater output pin/mode, targets, and safety limits.
 6. Assign sensor roles (battery_primary is required).
 
-## UI Notes
-- Config save shows a status line plus a toast on success/failure.
-- OTA page shows GitHub update availability and progress only.
+## Web UI
+- Status: live temps, mode, target, output, faults, Wi-Fi/MQTT, tools
+- Config: all settings, conditional sections, import/export
+- OTA: manual upload and GitHub release update
+- PID Autotune: start/abort, progress, result, save
 
-## How To
-- Rescan sensors: Status page -> `Rescan Sensors`.
-- Reset faults: Status page -> `Reset Fault`.
-- Output test: Status page -> `Output Test` (respects safety limits).
-- Export config: Config page -> `Export Config`.
-- Import config: Config page -> `Import Config`.
-- Manual OTA: OTA page -> upload `.bin`.
-- GitHub OTA: OTA page -> `Check Release` then `Update`.
+## Control Modes
+- `IDLE`, `CHARGE`, `DISCHARGE`, optional `FROST_PROTECT`, optional `MANUAL`
+- Any fault forces `FAULT` and disables heater output until reset and safe
 
-## Modes
-`IDLE`, `CHARGE`, `DISCHARGE`, optional `FROST_PROTECT`, optional `MANUAL`.
-Faults force `FAULT` and shut the heater off until reset.
+## Safety (always on)
+- Over-temp hard cutoff (latched)
+- Primary sensor invalid (latched)
+- Primary/secondary plausibility check (latched)
+- Stuck-on / no-heat detection (latched)
+- Thermal runaway detection (latched)
+- Config invalid -> heater off
 
-## Fault Codes
-`OVER_TEMP`, `SENSOR_PRIMARY_FAIL`, `PLAUSIBILITY_FAIL`, `STUCK_ON_NO_HEAT`,
-`THERMAL_RUNAWAY`, `MQTT_TIMEOUT`, `CONFIG_INVALID`.
+## PID Autotune
+- Fully automatic, minutes-scale safe for slow thermal systems
+- Probe phase classifies system as FAST/MEDIUM/SLOW
+- Relay autotune with robust peak detection
+- Aggressiveness presets: conservative / normal / aggressive
+- Optional auto-save on completion
 
-## MQTT Topic Table
+## OTA
+### Manual OTA
+Upload a compiled `.ota` from the OTA page. Progress and automatic reboot on success.
+
+## MQTT
 Base topic: `mqttBaseTopic` (default `battbrrr`).
 
 | Direction | Topic | Payload | Notes |
 |---|---|---|---|
-| Publish | `<base>/heater/state` | JSON | Live status, temps, faults, mode, output, wifi/mqtt, uptime |
+| Publish | `<base>/heater/state` | JSON | temps, roles, mode, enabled, target, output, faults, wifi/mqtt, uptime |
 | Publish | `<base>/heater/event` | JSON | `{type, detail, ts_ms}` |
-| Publish | `<base>/heater/autotune/state` | JSON | Autotune phase, progress, class, rate |
-| Publish | `<base>/heater/autotune/progress` | JSON | Progress + current values |
+| Publish | `<base>/heater/autotune/state` | JSON | phase, progress, class, rate |
+| Publish | `<base>/heater/autotune/progress` | JSON | progress + current values |
 | Publish | `<base>/heater/autotune/result` | JSON | PID result + quality |
 | Subscribe | `<base>/heater/cmd/enable` | `true/false` or `1/0` | Enable controller |
 | Subscribe | `<base>/heater/cmd/mode` | `IDLE/CHARGE/DISCHARGE/FROST_PROTECT/MANUAL` or `0..4` | Set mode |
@@ -53,16 +78,26 @@ Base topic: `mqttBaseTopic` (default `battbrrr`).
 | Subscribe | `<base>/heater/cmd/autotune_abort` | any | Abort autotune |
 | Subscribe | `<base>/heater/cmd/autotune_commit` | any | Save autotune result |
 
-### BMS Inputs
+### BMS Inputs (MQTT)
 Configured via UI:
 - `bmsStateTopic` -> maps `charge/discharge/idle` to modes
 - `bmsTempTopic` -> optional temperature fallback
 - Optional JSON paths (dot notation): `bmsStatePath`, `bmsTempPath`
 - Timeout: `bmsTimeoutS`
 
+## GPIO Notes
+- Heater output pin must be a valid ESP32 output pin
+- OneWire pin must be a valid output-capable GPIO
+- Inputs can be disabled by setting pin to `-1`
+- Invalid GPIO configs trigger `CONFIG_INVALID` fault
+
+
+
+## Troubleshooting
+- Sensor primary fail: assign a primary sensor and rescan
+- Invalid config: check GPIO assignments and target limits
+- No sensors: verify OneWire pin, power, pull-up resistor, and rescan
+- Control temp shows `~`: UI/backend holding last known value during brief dropouts
+
 ## Notes
-- No blocking `delay()` loops.
-- Safety always wins: faults disable output until reset and safe.
-
-
-
+- Safety always wins: any fault disables output until reset and safe.

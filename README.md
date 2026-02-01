@@ -1,4 +1,4 @@
-# BattBrrr (ESP32 + MQTT)
+# BattBrrr (battery Heating Controller)
 
 ## Quick Start
 1. Build and flash with PlatformIO (see `platformio.ini`).
@@ -63,4 +63,5 @@ Configured via UI:
 ## Notes
 - No blocking `delay()` loops.
 - Safety always wins: faults disable output until reset and safe.
+
 

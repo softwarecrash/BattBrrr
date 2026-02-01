@@ -67,5 +67,6 @@ private:
 
   std::unique_ptr<OneWire> _oneWire;
   std::unique_ptr<DallasTemperature> _dallas;
+  uint16_t _conversionWaitMs;
   std::vector<Sensor> _sensors;
 };

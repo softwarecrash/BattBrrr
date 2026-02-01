@@ -49,11 +49,17 @@ HeaterController::HeaterController()
     _faultActiveMask(0),
     _lastFault(FaultCode::CONFIG_INVALID),
     _lastFaultMs(0),
+    _bootMs(0),
+    _hadValidPrimary(false),
+    _primaryInvalidSinceMs(0),
     _resetFaultsRequested(false) {
   memset(&_cfg, 0, sizeof(_cfg));
 }
 
 void HeaterController::begin(Settings& settings) {
+  _bootMs = millis();
+  _hadValidPrimary = false;
+  _primaryInvalidSinceMs = 0;
   applySettings(settings);
   configureOutput();
 }
@@ -366,14 +372,28 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
   if (primaryValid) {
     _controlTempValid = true;
     _controlTempC = primaryTemp;
+    _hadValidPrimary = true;
+    _primaryInvalidSinceMs = 0;
   } else if (_cfg.bmsFallback && mqtt.bmsTempValid(nowMs)) {
     _controlTempValid = true;
     _controlTempC = mqtt.bmsTempC();
     _usingBmsFallback = true;
+    _primaryInvalidSinceMs = 0;
+  } else {
+    if (_primaryInvalidSinceMs == 0) _primaryInvalidSinceMs = nowMs;
   }
 
   if (!_controlTempValid) {
-    setFault(FaultCode::SENSOR_PRIMARY_FAIL, true, nowMs);
+    const uint32_t bootGraceMs = 10000;
+    const uint32_t invalidHoldMs = 3000;
+    const bool inBootGrace = (nowMs - _bootMs) < bootGraceMs;
+    const bool inRescanGrace = temps.lastScanMs() != 0 && (nowMs - temps.lastScanMs()) < 4000;
+    const bool shortInvalid = _primaryInvalidSinceMs != 0 && (nowMs - _primaryInvalidSinceMs) < invalidHoldMs;
+    const bool latch = _hadValidPrimary && !inBootGrace && !inRescanGrace && !shortInvalid;
+    const bool setNow = !inBootGrace && !shortInvalid;
+    if (setNow) {
+      setFault(FaultCode::SENSOR_PRIMARY_FAIL, latch, nowMs);
+    }
   }
 
   if (_controlTempValid && _controlTempC > _cfg.maxTempC) {
@@ -430,8 +450,10 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
       }
     }
 
-    if (_controlTempC > (_targetC + _cfg.runawayMarginC)) {
-      setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
+    if (_effectiveMode != ControlMode::MANUAL) {
+      if (_controlTempC > (_targetC + _cfg.runawayMarginC)) {
+        setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
+      }
     }
   }
 

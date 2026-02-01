@@ -184,5 +184,9 @@ private:
   FaultCode _lastFault;
   uint32_t _lastFaultMs;
 
+  uint32_t _bootMs;
+  bool _hadValidPrimary;
+  uint32_t _primaryInvalidSinceMs;
+
   bool _resetFaultsRequested;
 };

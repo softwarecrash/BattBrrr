@@ -3,10 +3,27 @@
 #include <ArduinoJson.h>
 
 #include "GpioValidator.h"
+#include "WebSerial.h"
 
 namespace {
 constexpr uint32_t kConversionMs12bit = 750;
+uint16_t conversionMsForResolution(uint8_t resBits) {
+  switch (resBits) {
+    case 9: return 94;
+    case 10: return 188;
+    case 11: return 375;
+    case 12:
+    default:
+      return 750;
+  }
+}
 }  // namespace
+
+#if TEMP_DEBUG
+#define TEMP_LOG(msg) do { webSerial.println(msg); } while (0)
+#else
+#define TEMP_LOG(msg) do { } while (0)
+#endif
 
 TempManager::TempManager()
   : _oneWirePin(-1),
@@ -17,7 +34,8 @@ TempManager::TempManager()
     _lastUpdateMs(0),
     _lastScanMs(0),
     _conversionInFlight(false),
-    _rescanPending(true) {}
+    _rescanPending(true),
+    _conversionWaitMs(kConversionMs12bit) {}
 
 void TempManager::begin(Settings& settings) {
   loadConfigFromJson(settings.get.sensorsJson());
@@ -41,17 +59,23 @@ void TempManager::ensureBus(Settings& settings) {
   _oneWire.reset();
 
   if (_oneWirePin < 0) {
+    TEMP_LOG("[TEMP] OneWire pin disabled");
     return;
   }
 
   if (!GpioValidator::isValidOutputPin(_oneWirePin)) {
+    TEMP_LOG(String("[TEMP] Invalid OneWire pin: ") + String(_oneWirePin));
     return;
   }
 
+  TEMP_LOG(String("[TEMP] Init OneWire on GPIO ") + String(_oneWirePin));
   _oneWire.reset(new OneWire(_oneWirePin));
   _dallas.reset(new DallasTemperature(_oneWire.get()));
+  _dallas->begin();
+  _dallas->setResolution(12);
+  _conversionWaitMs = conversionMsForResolution(12);
   _dallas->setWaitForConversion(false);
-  _dallas->setCheckForConversion(false);
+  _dallas->setCheckForConversion(true);
 
   _rescanPending = true;
 }
@@ -71,10 +95,12 @@ void TempManager::loop(uint32_t nowMs) {
     _lastScanMs = nowMs;
     std::vector<String> presentIds;
     const uint8_t count = _dallas->getDeviceCount();
+    TEMP_LOG(String("[TEMP] Rescan -> found devices: ") + String(count));
     for (uint8_t i = 0; i < count; ++i) {
       uint8_t addr[8] = {};
       if (_dallas->getAddress(addr, i)) {
         presentIds.push_back(addressToString(addr));
+        TEMP_LOG(String("[TEMP] Device ") + String(i) + ": " + presentIds.back());
         bool known = false;
         for (auto& sensor : _sensors) {
           if (sensor.id == presentIds.back()) {
@@ -104,7 +130,9 @@ void TempManager::loop(uint32_t nowMs) {
   }
 
   if (_conversionInFlight) {
-    if ((nowMs - _lastConversionStartMs) >= kConversionMs12bit) {
+    const uint32_t elapsed = nowMs - _lastConversionStartMs;
+    const bool done = _dallas->isConversionComplete();
+    if (done || elapsed >= (_conversionWaitMs + 200)) {
       readSensors(nowMs);
       _conversionInFlight = false;
       _lastUpdateMs = nowMs;
@@ -161,10 +189,12 @@ bool TempManager::rescanNow(Settings& settings) {
 
   std::vector<String> presentIds;
   const uint8_t count = _dallas->getDeviceCount();
+  TEMP_LOG(String("[TEMP] Manual rescan -> found devices: ") + String(count));
   for (uint8_t i = 0; i < count; ++i) {
     uint8_t addr[8] = {};
     if (_dallas->getAddress(addr, i)) {
       presentIds.push_back(addressToString(addr));
+      TEMP_LOG(String("[TEMP] Device ") + String(i) + ": " + presentIds.back());
       bool known = false;
       for (auto& sensor : _sensors) {
         if (sensor.id == presentIds.back()) {
@@ -264,8 +294,23 @@ bool TempManager::hasRole(SensorRole role) const {
 }
 
 void TempManager::applySensorOverrides(const String& json, Settings& settings) {
+  const auto oldSensors = _sensors;
   loadConfigFromJson(json);
+  for (auto& sensor : _sensors) {
+    for (const auto& old : oldSensors) {
+      if (sensor.id == old.id) {
+        sensor.present = old.present;
+        sensor.valid = old.valid;
+        sensor.tempC = old.tempC;
+        sensor.errorStreak = old.errorStreak;
+        sensor.errorTotal = old.errorTotal;
+        sensor.lastReadMs = old.lastReadMs;
+        break;
+      }
+    }
+  }
   settings.set.sensorsJson(json);
+  requestRescan();
 }
 
 String TempManager::buildSensorsJson() const {

@@ -215,7 +215,7 @@
         const valid = s.valid ? "valid" : "invalid";
         const role = s.role || "unused";
         const el = document.createElement("div");
-        el.className = "sensor-item " + tempClass;
+        el.className = "sensor-item " + tempClass + " " + (s.valid ? "sensor-valid" : "sensor-invalid");
         el.innerHTML = ''
           + '<div class="sensor-head">'
           + '<div class="sensor-name">' + (s.name || s.id) + '</div>'

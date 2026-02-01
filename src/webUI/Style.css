@@ -497,6 +497,8 @@ button:disabled,.btn:disabled{opacity:.55;cursor:not-allowed;color:var(--disable
 .sensor-item.temp-hot{border-color:rgba(255,122,24,.6);box-shadow:var(--shadow-heat)}
 .sensor-item.temp-fault{border-color:rgba(255,59,59,.7);box-shadow:0 0 18px rgba(255,59,59,.25)}
 .sensor-item.temp-neutral{border-color:var(--border)}
+.sensor-item.sensor-valid{border-color:var(--ok)}
+.sensor-item.sensor-invalid{border-color:var(--fault)}
 
 .temp-cold{color:var(--c-ice)}
 .temp-neutral{color:var(--text)}

@@ -230,9 +230,17 @@ void WebServerHandler::handleConfigGet(AsyncWebServerRequest* req) {
   doc["bmsTimeoutS"] = settings.get.bmsTimeoutS();
   doc["bmsFallback"] = settings.get.bmsFallback();
 
-  JsonDocument sensorsDoc;
-  deserializeJson(sensorsDoc, settings.get.sensorsJson());
-  doc["sensors"] = sensorsDoc.as<JsonVariant>();
+  JsonArray sensorsArr = doc["sensors"].to<JsonArray>();
+  for (const auto& sensor : tempManager.sensors()) {
+    JsonObject obj = sensorsArr.add<JsonObject>();
+    obj["id"] = sensor.id;
+    obj["name"] = sensor.name;
+    obj["role"] = sensorRoleToString(sensor.role);
+    obj["offset_c"] = sensor.offsetC;
+    obj["present"] = sensor.present;
+    obj["valid"] = sensor.valid;
+    obj["temp_c"] = sensor.tempC;
+  }
 
   String out;
   serializeJson(doc, out);

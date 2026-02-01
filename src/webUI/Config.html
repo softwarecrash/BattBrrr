@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>BattBrrr - Configuration</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+
+  <div id="container">
+    <div id="header">
+      <a href="/"><img id="logo" src="/logo.svg" alt="Logo" /></a>
+      <h1>Configuration</h1>
+    </div>
+
+    <form id="configForm" class="panel">
+      <div class="panel-title">General</div>
+
+      <label for="deviceName">Device Name</label>
+      <input type="text" id="deviceName" autocomplete="off" />
+
+      <label for="enabled">Controller Enabled</label>
+      <select id="enabled">
+        <option value="1">Enabled</option>
+        <option value="0">Disabled</option>
+      </select>
+
+      <label for="mode">Default Mode</label>
+      <select id="mode">
+        <option value="0">IDLE</option>
+        <option value="1">CHARGE</option>
+        <option value="2">DISCHARGE</option>
+        <option value="3">FROST_PROTECT</option>
+        <option value="4">MANUAL</option>
+      </select>
+
+      <label for="frostEnable">Frost Protect Enabled</label>
+      <select id="frostEnable">
+        <option value="1">Enabled</option>
+        <option value="0">Disabled</option>
+      </select>
+
+      <div class="detailSplitter">Targets and Limits</div>
+
+      <label for="targetIdleC">Target IDLE (C)</label>
+      <input type="number" id="targetIdleC" step="0.1" />
+
+      <label for="targetChargeC">Target CHARGE (C)</label>
+      <input type="number" id="targetChargeC" step="0.1" />
+
+      <label for="targetDischargeC">Target DISCHARGE (C)</label>
+      <input type="number" id="targetDischargeC" step="0.1" />
+
+      <label for="targetFrostC">Target FROST (C)</label>
+      <input type="number" id="targetFrostC" step="0.1" />
+
+      <label for="maxTempC">Max Temp Cutoff (C)</label>
+      <input type="number" id="maxTempC" step="0.1" />
+
+      <label for="maxOutputPct">Max Output (%)</label>
+      <input type="number" id="maxOutputPct" step="1" />
+
+      <label for="manualOutputPct">Manual Output (%)</label>
+      <input type="number" id="manualOutputPct" step="1" />
+
+      <div class="detailSplitter">Control</div>
+
+      <label for="algorithm">Algorithm</label>
+      <select id="algorithm">
+        <option value="0">PID</option>
+        <option value="1">Hysteresis</option>
+      </select>
+
+      <div class="section collapse" data-show-when="algorithm:0">
+        <div class="section-title">PID Settings</div>
+        <div class="input-row">
+          <div>
+            <label for="pidKp">PID Kp</label>
+            <input type="number" id="pidKp" step="0.01" />
+          </div>
+          <div>
+            <label for="pidKi">PID Ki</label>
+            <input type="number" id="pidKi" step="0.01" />
+          </div>
+        </div>
+        <div class="input-row">
+          <div>
+            <label for="pidKd">PID Kd</label>
+            <input type="number" id="pidKd" step="0.01" />
+          </div>
+          <div>
+            <label for="pidIntegralLimit">PID Integral Limit</label>
+            <input type="number" id="pidIntegralLimit" step="0.1" />
+          </div>
+        </div>
+        <label for="pidDerivFilter">PID Derivative Filter (0..1)</label>
+        <input type="number" id="pidDerivFilter" step="0.01" />
+      </div>
+
+      <div class="section collapse" data-show-when="algorithm:1">
+        <div class="section-title">Hysteresis Settings</div>
+        <div class="input-row">
+          <div>
+            <label for="hystOnDelta">Hysteresis ON Delta (C)</label>
+            <input type="number" id="hystOnDelta" step="0.1" />
+          </div>
+          <div>
+            <label for="hystOffDelta">Hysteresis OFF Delta (C)</label>
+            <input type="number" id="hystOffDelta" step="0.1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="detailSplitter">Output</div>
+
+      <label for="heaterOutPin">Heater Output Pin</label>
+      <input type="number" id="heaterOutPin" step="1" />
+
+      <label for="heaterOutInvert">Output Invert</label>
+      <select id="heaterOutInvert">
+        <option value="0">Normal</option>
+        <option value="1">Inverted</option>
+      </select>
+
+      <label for="heaterOutType">Output Type</label>
+      <select id="heaterOutType">
+        <option value="0">PWM</option>
+        <option value="1">Window</option>
+      </select>
+
+      <div class="section collapse" data-show-when="heaterOutType:0">
+        <div class="section-title">PWM Settings</div>
+        <div class="input-row">
+          <div>
+            <label for="pwmFreq">PWM Frequency (Hz)</label>
+            <input type="number" id="pwmFreq" step="1" />
+          </div>
+          <div>
+            <label for="pwmResolution">PWM Resolution (bits)</label>
+            <input type="number" id="pwmResolution" step="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section collapse" data-show-when="heaterOutType:1">
+        <div class="section-title">Windowed Output Settings</div>
+        <label for="windowMs">Window Size (ms)</label>
+        <input type="number" id="windowMs" step="1" />
+
+        <div class="input-row">
+          <div>
+            <label for="minOnMs">Min ON (ms)</label>
+            <input type="number" id="minOnMs" step="1" />
+          </div>
+          <div>
+            <label for="minOffMs">Min OFF (ms)</label>
+            <input type="number" id="minOffMs" step="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="detailSplitter">Sensors</div>
+
+      <label for="oneWirePin">OneWire Pin</label>
+      <input type="number" id="oneWirePin" step="1" />
+
+      <div class="input-row">
+        <div>
+          <label for="sensorPollMs">Poll Interval (ms)</label>
+          <input type="number" id="sensorPollMs" step="1" />
+        </div>
+        <div>
+          <label for="sensorFailCount">Fail Count</label>
+          <input type="number" id="sensorFailCount" step="1" />
+        </div>
+      </div>
+      <label for="sensorRescanMin">Rescan Interval (min)</label>
+      <input type="number" id="sensorRescanMin" step="1" />
+
+      <div class="detailSplitter">Sensor Roles</div>
+      <div id="sensorConfigList" class="sensor-list"></div>
+
+      <div class="detailSplitter">GPIO Inputs</div>
+
+      <div class="section">
+        <div class="section-title">Enable Input</div>
+        <label for="enableInPin">Enable Input Pin</label>
+        <input type="number" id="enableInPin" step="1" />
+        <div class="section-body collapse" data-show-when="enableInPin:enabled">
+          <div class="input-row">
+            <div>
+              <label for="enableInPull">Enable Pull</label>
+              <select id="enableInPull">
+                <option value="0">none</option>
+                <option value="1">pullup</option>
+                <option value="2">pulldown</option>
+              </select>
+            </div>
+            <div>
+              <label for="enableInActive">Enable Active</label>
+              <select id="enableInActive">
+                <option value="0">active_high</option>
+                <option value="1">active_low</option>
+              </select>
+            </div>
+          </div>
+          <label for="enableInDebounce">Enable Debounce (ms)</label>
+          <input type="number" id="enableInDebounce" step="1" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Mode Input</div>
+        <label for="modeInPin">Mode Input Pin</label>
+        <input type="number" id="modeInPin" step="1" />
+        <div class="section-body collapse" data-show-when="modeInPin:enabled">
+          <div class="input-row">
+            <div>
+              <label for="modeInPull">Mode Pull</label>
+              <select id="modeInPull">
+                <option value="0">none</option>
+                <option value="1">pullup</option>
+                <option value="2">pulldown</option>
+              </select>
+            </div>
+            <div>
+              <label for="modeInActive">Mode Active</label>
+              <select id="modeInActive">
+                <option value="0">active_high</option>
+                <option value="1">active_low</option>
+              </select>
+            </div>
+          </div>
+          <label for="modeInDebounce">Mode Debounce (ms)</label>
+          <input type="number" id="modeInDebounce" step="1" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Manual Override Input</div>
+        <label for="manualInPin">Manual Override Pin</label>
+        <input type="number" id="manualInPin" step="1" />
+        <div class="section-body collapse" data-show-when="manualInPin:enabled">
+          <div class="input-row">
+            <div>
+              <label for="manualInPull">Manual Pull</label>
+              <select id="manualInPull">
+                <option value="0">none</option>
+                <option value="1">pullup</option>
+                <option value="2">pulldown</option>
+              </select>
+            </div>
+            <div>
+              <label for="manualInActive">Manual Active</label>
+              <select id="manualInActive">
+                <option value="0">active_high</option>
+                <option value="1">active_low</option>
+              </select>
+            </div>
+          </div>
+          <label for="manualInDebounce">Manual Debounce (ms)</label>
+          <input type="number" id="manualInDebounce" step="1" />
+        </div>
+      </div>
+
+      <div class="detailSplitter">Safety</div>
+
+      <label for="maxDeltaC">Plausibility Delta (C)</label>
+      <input type="number" id="maxDeltaC" step="0.1" />
+
+      <label for="stuckOnPct">Stuck-On Threshold (%)</label>
+      <input type="number" id="stuckOnPct" step="1" />
+
+      <div class="input-row">
+        <div>
+          <label for="stuckOnS">Stuck-On Time (s)</label>
+          <input type="number" id="stuckOnS" step="1" />
+        </div>
+        <div>
+          <label for="riseWindowS">Rise Window (s)</label>
+          <input type="number" id="riseWindowS" step="1" />
+        </div>
+      </div>
+
+      <label for="minRiseC">Min Rise (C)</label>
+      <input type="number" id="minRiseC" step="0.1" />
+
+      <label for="runawayEnable">Runaway Detect</label>
+      <select id="runawayEnable">
+        <option value="1">Enabled</option>
+        <option value="0">Disabled</option>
+      </select>
+
+      <div class="input-row">
+        <div>
+          <label for="runawayRateCPerMin">Runaway Rate (C/min)</label>
+          <input type="number" id="runawayRateCPerMin" step="0.1" />
+        </div>
+        <div>
+          <label for="runawayWindowS">Runaway Window (s)</label>
+          <input type="number" id="runawayWindowS" step="1" />
+        </div>
+      </div>
+
+      <label for="runawayMarginC">Runaway Margin (C)</label>
+      <input type="number" id="runawayMarginC" step="0.1" />
+
+      <label for="runawayLatch">Runaway Latch</label>
+      <select id="runawayLatch">
+        <option value="1">Latched</option>
+        <option value="0">Non-latched</option>
+      </select>
+
+      <div class="detailSplitter">Failsafe</div>
+
+      <label for="mqttLossMode">MQTT Loss Mode</label>
+      <select id="mqttLossMode">
+        <option value="0">off</option>
+        <option value="1">frost_protect</option>
+        <option value="2">idle</option>
+        <option value="3">keep_last_safe</option>
+      </select>
+
+      <label for="mqttTimeoutS">MQTT Timeout (s)</label>
+      <input type="number" id="mqttTimeoutS" step="1" />
+
+      <div class="detailSplitter">MQTT</div>
+
+      <label for="mqttEnable">MQTT Enabled</label>
+      <select id="mqttEnable">
+        <option value="1">Enabled</option>
+        <option value="0">Disabled</option>
+      </select>
+
+      <label for="mqttHost">Host</label>
+      <input type="text" id="mqttHost" />
+
+      <label for="mqttPort">Port</label>
+      <input type="number" id="mqttPort" step="1" />
+
+      <label for="mqttUser">User</label>
+      <input type="text" id="mqttUser" />
+
+      <label for="mqttPass">Password</label>
+      <input type="password" id="mqttPass" />
+
+      <label for="mqttClientId">Client ID</label>
+      <input type="text" id="mqttClientId" />
+
+      <label for="mqttBaseTopic">Base Topic</label>
+      <input type="text" id="mqttBaseTopic" />
+
+      <div class="input-row">
+        <div>
+          <label for="mqttKeepaliveS">Keepalive (s)</label>
+          <input type="number" id="mqttKeepaliveS" step="1" />
+        </div>
+        <div>
+          <label for="mqttPublishS">Publish Interval (s)</label>
+          <input type="number" id="mqttPublishS" step="1" />
+        </div>
+      </div>
+
+      <label for="mqttRetain">Retain State</label>
+      <select id="mqttRetain">
+        <option value="0">Disabled</option>
+        <option value="1">Enabled</option>
+      </select>
+
+      <div class="detailSplitter">BMS Inputs</div>
+
+      <label for="bmsEnable">Use BMS Inputs</label>
+      <select id="bmsEnable">
+        <option value="0">Disabled</option>
+        <option value="1">Enabled</option>
+      </select>
+
+      <div class="section collapse" data-show-when="bmsEnable:1">
+        <div class="section-title">BMS Topics</div>
+        <label for="bmsStateTopic">BMS State Topic</label>
+        <input type="text" id="bmsStateTopic" />
+
+        <label for="bmsStatePath">BMS State JSON Path</label>
+        <input type="text" id="bmsStatePath" placeholder="data.state" />
+
+        <label for="bmsTempTopic">BMS Temp Topic</label>
+        <input type="text" id="bmsTempTopic" />
+
+        <label for="bmsTempPath">BMS Temp JSON Path</label>
+        <input type="text" id="bmsTempPath" placeholder="data.temp" />
+
+        <label for="bmsTimeoutS">BMS Timeout (s)</label>
+        <input type="number" id="bmsTimeoutS" step="1" />
+
+        <label for="bmsFallback">Use BMS Temp Fallback</label>
+        <select id="bmsFallback">
+          <option value="0">Disabled</option>
+          <option value="1">Enabled</option>
+        </select>
+      </div>
+
+      <div class="detailSplitter">Tools</div>
+      <div class="actions-row actions">
+        <button type="button" class="btn btn-outline" id="exportConfigBtn">Export Config</button>
+      </div>
+      <label for="importFile">Import Config JSON</label>
+      <input type="file" id="importFile" accept="application/json" />
+      <div class="actions-row actions">
+        <button type="button" class="btn btn-outline" id="importBtn">Import Config</button>
+      </div>
+
+      <div class="button-stack actions">
+        <button type="submit" class="btn">Save</button>
+        <button type="button" class="btn btn-outline" onclick="location.href='/'">Back</button>
+      </div>
+      <div class="inline-info" id="saveStatus">--</div>
+    </form>
+  </div>
+
+  <div id="toast"><span id="toast-icon">i</span><span id="toast-msg">Placeholder</span></div>
+  <div class="page-footer" id="fwFooter">Firmware v?</div>
+
+  <script src="/backgroundCanvas.js"></script>
+  <script>
+    function alertToast(type, message) {
+      const toast = document.getElementById("toast");
+      const icon = document.getElementById("toast-icon");
+      const msg  = document.getElementById("toast-msg");
+
+      const classes = ["toast-info","toast-cold","toast-heat","toast-warn","toast-fault"];
+      classes.forEach(c => toast.classList.remove(c));
+
+      let iconChar = "i";
+      switch (String(type).toLowerCase()) {
+        case "success":
+          iconChar = "OK";
+          toast.classList.add("toast-heat");
+          break;
+        case "error":
+          iconChar = "ERR";
+          toast.classList.add("toast-fault");
+          break;
+        case "warning":
+          iconChar = "WARN";
+          toast.classList.add("toast-warn");
+          break;
+        default:
+          iconChar = "i";
+          toast.classList.add("toast-info");
+      }
+
+      icon.textContent = iconChar;
+      msg.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    function renderSensors(list) {
+      const container = document.getElementById("sensorConfigList");
+      container.innerHTML = "";
+      if (!list || !list.length) {
+        container.innerHTML = '<div class="sensor-item"><div class="sensor-meta">No sensors detected</div></div>';
+        return;
+      }
+      list.forEach(s => {
+        const row = document.createElement("div");
+        row.className = "sensor-item";
+        row.dataset.id = s.id;
+        row.innerHTML = ''
+          + '<div class="sensor-head">'
+          + '<div class="sensor-name">' + s.id + '</div>'
+          + '<span class="sensor-meta">' + (s.present ? "present" : "missing") + '</span>'
+          + '</div>'
+          + '<label>Name</label>'
+          + '<input type="text" class="sensor-name-input" value="' + (s.name || "") + '" />'
+          + '<label>Role</label>'
+          + '<select class="sensor-role-input">'
+          + '<option value="battery_primary">battery_primary</option>'
+          + '<option value="battery_secondary">battery_secondary</option>'
+          + '<option value="ambient">ambient</option>'
+          + '<option value="unused">unused</option>'
+          + '</select>'
+          + '<label>Offset (C)</label>'
+          + '<input type="number" class="sensor-offset-input" step="0.1" value="' + (s.offset_c || 0) + '" />';
+        row.querySelector(".sensor-role-input").value = s.role || "unused";
+        container.appendChild(row);
+      });
+    }
+
+    function collectSensors() {
+      const out = [];
+      document.querySelectorAll("#sensorConfigList .sensor-item").forEach(row => {
+        out.push({
+          id: row.dataset.id,
+          name: row.querySelector(".sensor-name-input").value.trim(),
+          role: row.querySelector(".sensor-role-input").value,
+          offset_c: parseFloat(row.querySelector(".sensor-offset-input").value || "0")
+        });
+      });
+      return out;
+    }
+
+    function setValue(id, value) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.value = String(value ?? "");
+    }
+
+    function getValue(id) {
+      const el = document.getElementById(id);
+      if (!el) return "";
+      if (el.type === "checkbox") return el.checked ? "1" : "0";
+      return el.value;
+    }
+
+    function matchesExpected(current, expected) {
+      const cur = String(current ?? "");
+      const exp = String(expected ?? "").trim();
+      if (exp === "enabled") {
+        const num = Number(cur);
+        return Number.isFinite(num) ? num !== -1 : cur.trim() !== "";
+      }
+      if (exp === "disabled") {
+        const num = Number(cur);
+        return Number.isFinite(num) ? num === -1 : cur.trim() === "";
+      }
+      if (exp === "nonempty") return cur.trim().length > 0;
+      if (exp === "empty") return cur.trim().length === 0;
+      return cur === exp;
+    }
+
+    function applyConditionalVisibility() {
+      document.querySelectorAll("[data-show-when]").forEach(section => {
+        const raw = section.getAttribute("data-show-when") || "";
+        const rules = raw.split(/[,;]+/).map(r => r.trim()).filter(Boolean);
+        let visible = true;
+        for (const rule of rules) {
+          const parts = rule.split(":");
+          if (parts.length < 2) continue;
+          const field = parts[0].trim();
+          const expected = parts.slice(1).join(":");
+          const current = getValue(field);
+          if (!matchesExpected(current, expected)) {
+            visible = false;
+            break;
+          }
+        }
+        if (visible) section.classList.remove("hidden");
+        else section.classList.add("hidden");
+      });
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch("/config.json", { cache: "no-store" });
+        const c = await res.json();
+
+        setValue("deviceName", c.deviceName);
+        setValue("enabled", c.enabled ? 1 : 0);
+        setValue("mode", c.mode);
+        setValue("frostEnable", c.frostEnable ? 1 : 0);
+        setValue("targetIdleC", c.targetIdleC);
+        setValue("targetChargeC", c.targetChargeC);
+        setValue("targetDischargeC", c.targetDischargeC);
+        setValue("targetFrostC", c.targetFrostC);
+        setValue("maxTempC", c.maxTempC);
+        setValue("maxOutputPct", c.maxOutputPct);
+        setValue("manualOutputPct", c.manualOutputPct);
+
+        setValue("algorithm", c.algorithm);
+        setValue("pidKp", c.pidKp);
+        setValue("pidKi", c.pidKi);
+        setValue("pidKd", c.pidKd);
+        setValue("pidIntegralLimit", c.pidIntegralLimit);
+        setValue("pidDerivFilter", c.pidDerivFilter);
+        setValue("hystOnDelta", c.hystOnDelta);
+        setValue("hystOffDelta", c.hystOffDelta);
+
+        setValue("heaterOutPin", c.heaterOutPin);
+        setValue("heaterOutInvert", c.heaterOutInvert ? 1 : 0);
+        setValue("heaterOutType", c.heaterOutType);
+        setValue("pwmFreq", c.pwmFreq);
+        setValue("pwmResolution", c.pwmResolution);
+        setValue("windowMs", c.windowMs);
+        setValue("minOnMs", c.minOnMs);
+        setValue("minOffMs", c.minOffMs);
+
+        setValue("oneWirePin", c.oneWirePin);
+        setValue("sensorPollMs", c.sensorPollMs);
+        setValue("sensorFailCount", c.sensorFailCount);
+        setValue("sensorRescanMin", c.sensorRescanMin);
+
+        setValue("enableInPin", c.enableInPin);
+        setValue("enableInPull", c.enableInPull);
+        setValue("enableInActive", c.enableInActive);
+        setValue("enableInDebounce", c.enableInDebounce);
+        setValue("modeInPin", c.modeInPin);
+        setValue("modeInPull", c.modeInPull);
+        setValue("modeInActive", c.modeInActive);
+        setValue("modeInDebounce", c.modeInDebounce);
+        setValue("manualInPin", c.manualInPin);
+        setValue("manualInPull", c.manualInPull);
+        setValue("manualInActive", c.manualInActive);
+        setValue("manualInDebounce", c.manualInDebounce);
+
+        setValue("maxDeltaC", c.maxDeltaC);
+        setValue("stuckOnPct", c.stuckOnPct);
+        setValue("stuckOnS", c.stuckOnS);
+        setValue("riseWindowS", c.riseWindowS);
+        setValue("minRiseC", c.minRiseC);
+        setValue("runawayEnable", c.runawayEnable ? 1 : 0);
+        setValue("runawayRateCPerMin", c.runawayRateCPerMin);
+        setValue("runawayWindowS", c.runawayWindowS);
+        setValue("runawayMarginC", c.runawayMarginC);
+        setValue("runawayLatch", c.runawayLatch ? 1 : 0);
+
+        setValue("mqttLossMode", c.mqttLossMode);
+        setValue("mqttTimeoutS", c.mqttTimeoutS);
+
+        setValue("mqttEnable", c.mqttEnable ? 1 : 0);
+        setValue("mqttHost", c.mqttHost);
+        setValue("mqttPort", c.mqttPort);
+        setValue("mqttUser", c.mqttUser);
+        setValue("mqttPass", c.mqttPass);
+        setValue("mqttClientId", c.mqttClientId);
+        setValue("mqttBaseTopic", c.mqttBaseTopic);
+        setValue("mqttKeepaliveS", c.mqttKeepaliveS);
+        setValue("mqttPublishS", c.mqttPublishS);
+        setValue("mqttRetain", c.mqttRetain ? 1 : 0);
+
+        setValue("bmsStateTopic", c.bmsStateTopic);
+        setValue("bmsTempTopic", c.bmsTempTopic);
+        setValue("bmsStatePath", c.bmsStatePath);
+        setValue("bmsTempPath", c.bmsTempPath);
+        setValue("bmsTimeoutS", c.bmsTimeoutS);
+        setValue("bmsFallback", c.bmsFallback ? 1 : 0);
+
+        const bmsActive = Boolean((c.bmsStateTopic && String(c.bmsStateTopic).trim().length)
+          || (c.bmsTempTopic && String(c.bmsTempTopic).trim().length)
+          || c.bmsFallback);
+        setValue("bmsEnable", bmsActive ? 1 : 0);
+
+        renderSensors(c.sensors || []);
+      } catch {
+        alertToast("error", "Failed to load config.");
+      } finally {
+        applyConditionalVisibility();
+      }
+    }
+
+    document.getElementById("configForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const saveStatus = document.getElementById("saveStatus");
+      saveStatus.textContent = "Saving...";
+      const payload = {
+        deviceName: document.getElementById("deviceName").value.trim(),
+        enabled: document.getElementById("enabled").value === "1",
+        mode: Number(document.getElementById("mode").value),
+        frostEnable: document.getElementById("frostEnable").value === "1",
+
+        targetIdleC: Number(document.getElementById("targetIdleC").value),
+        targetChargeC: Number(document.getElementById("targetChargeC").value),
+        targetDischargeC: Number(document.getElementById("targetDischargeC").value),
+        targetFrostC: Number(document.getElementById("targetFrostC").value),
+        maxTempC: Number(document.getElementById("maxTempC").value),
+        maxOutputPct: Number(document.getElementById("maxOutputPct").value),
+        manualOutputPct: Number(document.getElementById("manualOutputPct").value),
+
+        algorithm: Number(document.getElementById("algorithm").value),
+        pidKp: Number(document.getElementById("pidKp").value),
+        pidKi: Number(document.getElementById("pidKi").value),
+        pidKd: Number(document.getElementById("pidKd").value),
+        pidIntegralLimit: Number(document.getElementById("pidIntegralLimit").value),
+        pidDerivFilter: Number(document.getElementById("pidDerivFilter").value),
+        hystOnDelta: Number(document.getElementById("hystOnDelta").value),
+        hystOffDelta: Number(document.getElementById("hystOffDelta").value),
+
+        heaterOutPin: Number(document.getElementById("heaterOutPin").value),
+        heaterOutInvert: document.getElementById("heaterOutInvert").value === "1",
+        heaterOutType: Number(document.getElementById("heaterOutType").value),
+        pwmFreq: Number(document.getElementById("pwmFreq").value),
+        pwmResolution: Number(document.getElementById("pwmResolution").value),
+        windowMs: Number(document.getElementById("windowMs").value),
+        minOnMs: Number(document.getElementById("minOnMs").value),
+        minOffMs: Number(document.getElementById("minOffMs").value),
+
+        oneWirePin: Number(document.getElementById("oneWirePin").value),
+        sensorPollMs: Number(document.getElementById("sensorPollMs").value),
+        sensorFailCount: Number(document.getElementById("sensorFailCount").value),
+        sensorRescanMin: Number(document.getElementById("sensorRescanMin").value),
+
+        enableInPin: Number(document.getElementById("enableInPin").value),
+        enableInPull: Number(document.getElementById("enableInPull").value),
+        enableInActive: Number(document.getElementById("enableInActive").value),
+        enableInDebounce: Number(document.getElementById("enableInDebounce").value),
+        modeInPin: Number(document.getElementById("modeInPin").value),
+        modeInPull: Number(document.getElementById("modeInPull").value),
+        modeInActive: Number(document.getElementById("modeInActive").value),
+        modeInDebounce: Number(document.getElementById("modeInDebounce").value),
+        manualInPin: Number(document.getElementById("manualInPin").value),
+        manualInPull: Number(document.getElementById("manualInPull").value),
+        manualInActive: Number(document.getElementById("manualInActive").value),
+        manualInDebounce: Number(document.getElementById("manualInDebounce").value),
+
+        maxDeltaC: Number(document.getElementById("maxDeltaC").value),
+        stuckOnPct: Number(document.getElementById("stuckOnPct").value),
+        stuckOnS: Number(document.getElementById("stuckOnS").value),
+        riseWindowS: Number(document.getElementById("riseWindowS").value),
+        minRiseC: Number(document.getElementById("minRiseC").value),
+        runawayEnable: document.getElementById("runawayEnable").value === "1",
+        runawayRateCPerMin: Number(document.getElementById("runawayRateCPerMin").value),
+        runawayWindowS: Number(document.getElementById("runawayWindowS").value),
+        runawayMarginC: Number(document.getElementById("runawayMarginC").value),
+        runawayLatch: document.getElementById("runawayLatch").value === "1",
+
+        mqttLossMode: Number(document.getElementById("mqttLossMode").value),
+        mqttTimeoutS: Number(document.getElementById("mqttTimeoutS").value),
+
+        mqttEnable: document.getElementById("mqttEnable").value === "1",
+        mqttHost: document.getElementById("mqttHost").value.trim(),
+        mqttPort: Number(document.getElementById("mqttPort").value),
+        mqttUser: document.getElementById("mqttUser").value.trim(),
+        mqttPass: document.getElementById("mqttPass").value,
+        mqttClientId: document.getElementById("mqttClientId").value.trim(),
+        mqttBaseTopic: document.getElementById("mqttBaseTopic").value.trim(),
+        mqttKeepaliveS: Number(document.getElementById("mqttKeepaliveS").value),
+        mqttPublishS: Number(document.getElementById("mqttPublishS").value),
+        mqttRetain: document.getElementById("mqttRetain").value === "1",
+
+        bmsStateTopic: document.getElementById("bmsStateTopic").value.trim(),
+        bmsStatePath: document.getElementById("bmsStatePath").value.trim(),
+        bmsTempTopic: document.getElementById("bmsTempTopic").value.trim(),
+        bmsTempPath: document.getElementById("bmsTempPath").value.trim(),
+        bmsTimeoutS: Number(document.getElementById("bmsTimeoutS").value),
+        bmsFallback: document.getElementById("bmsFallback").value === "1",
+
+        sensors: collectSensors()
+      };
+
+      try {
+        const res = await fetch("/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          alertToast("success", "Configuration saved.");
+          saveStatus.textContent = "Saved.";
+        } else {
+          alertToast("error", "Save failed.");
+          saveStatus.textContent = "Save failed.";
+        }
+      } catch {
+        alertToast("error", "Save request failed.");
+        saveStatus.textContent = "Save request failed.";
+      }
+    });
+
+    document.getElementById("exportConfigBtn").addEventListener("click", () => {
+      window.location.href = "/config/backup";
+    });
+
+    document.getElementById("importBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("importFile");
+      const file = fileInput.files[0];
+      if (!file) {
+        alertToast("warning", "Select a JSON file first.");
+        return;
+      }
+      try {
+        const text = await file.text();
+        const res = await fetch("/config/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: text
+        });
+        if (res.ok) {
+          alertToast("success", "Config imported. Restarting...");
+        } else {
+          alertToast("error", "Import failed.");
+        }
+      } catch {
+        alertToast("error", "Import error.");
+      }
+    });
+
+    [
+      "heaterOutType",
+      "algorithm",
+      "enableInPin",
+      "modeInPin",
+      "manualInPin",
+      "bmsEnable"
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("change", applyConditionalVisibility);
+      el.addEventListener("input", applyConditionalVisibility);
+    });
+
+    applyConditionalVisibility();
+    loadConfig();
+  </script>
+  <script src="/footer.js"></script>
+</body>
+</html>

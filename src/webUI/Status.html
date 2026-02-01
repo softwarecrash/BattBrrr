@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>BattBrrr Controller</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+
+  <div id="container">
+    <div id="header">
+      <div class="title-stack">
+        <div class="title-row">
+          <a href="/"><img id="logo" src="/logo.svg" alt="Logo" /></a>
+          <h1 id="deviceName">BattBrrr</h1>
+          <span class="wifi-icon" id="wifiIcon" aria-label="Wi-Fi signal" title="RSSI: ? dBm">
+            <i></i><i></i><i></i><i></i>
+          </span>
+        </div>
+        <div class="title-sub" id="deviceIp">IP: --</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">System Status</div>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Mode</span><span class="badge mode-badge" id="modeValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Enabled</span><span class="badge" id="enabledBadge">--</span></div>
+        <div class="kv-row"><span class="kv-key">Target (C)</span><span class="kv-val" id="targetValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Output</span><span class="kv-val heat-text" id="outputValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Control Temp (C)</span><span class="kv-val temp-neutral" id="controlTempValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Source</span><span class="kv-val" id="sourceValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">MQTT</span><span class="kv-val" id="mqttValue">--</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Temperatures</div>
+      <div class="sensor-list" id="sensorList"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Faults</div>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Active</span><span class="kv-val" id="faultActive">--</span></div>
+        <div class="kv-row"><span class="kv-key">Latched</span><span class="kv-val" id="faultLatched">--</span></div>
+        <div class="kv-row"><span class="kv-key">Last</span><span class="kv-val" id="faultLast">--</span></div>
+      </div>
+      <div class="actions-row actions">
+        <button class="btn btn-outline" id="resetFaultBtn">Reset Fault</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Quick Control</div>
+      <label for="modeSelect">Mode</label>
+      <select id="modeSelect">
+        <option value="IDLE">IDLE</option>
+        <option value="CHARGE">CHARGE</option>
+        <option value="DISCHARGE">DISCHARGE</option>
+        <option value="FROST_PROTECT">FROST_PROTECT</option>
+        <option value="MANUAL">MANUAL</option>
+      </select>
+      <div class="actions-row actions">
+        <button class="btn" id="toggleEnableBtn">Enable</button>
+        <button class="btn btn-outline" id="outputTestBtn">Output Test</button>
+      </div>
+      <div class="actions-row actions">
+        <button class="btn btn-outline" id="rescanBtn">Rescan Sensors</button>
+        <button class="btn btn-outline" onclick="location.href='/config'">Configuration</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Menu</div>
+      <div class="button-stack">
+        <button class="btn btn-outline" onclick="location.href='/autotune'">PID Autotune</button>
+        <button class="btn btn-outline" onclick="location.href='/ota'">Firmware Update</button>
+        <button class="btn btn-outline" onclick="location.href='/wifisetup'">Wi-Fi / Network</button>
+        <button class="btn btn-outline" onclick="window.open('/webserial','_blank','noopener')">Debug Log</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"><span id="toast-icon">i</span><span id="toast-msg">Placeholder</span></div>
+
+  <div class="modal-backdrop" id="outputModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Output Test</div>
+        <button class="modal-close" id="outputModalClose">Close</button>
+      </div>
+      <div class="modal-body">
+        <label for="testPct">Output Percent</label>
+        <input type="number" id="testPct" min="0" max="100" step="1" value="50" />
+        <label for="testDuration">Duration (s)</label>
+        <input type="number" id="testDuration" min="1" max="300" step="1" value="10" />
+        <div class="actions actions-row">
+          <button class="btn" id="startTestBtn">Start Test</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer" id="fwFooter">Firmware v?</div>
+
+  <script src="/backgroundCanvas.js"></script>
+  <script>
+    const TEMP_NEAR_BAND = 0.8;
+    const TEMP_COLD_BAND = -1.5;
+    const TEMP_HOT_BAND = 1.5;
+    const TEMP_FAULT_DELTA = 8.0;
+
+    function tempToClass(tempC, targetC, hasFault) {
+      if (!Number.isFinite(tempC) || !Number.isFinite(targetC)) return "temp-neutral";
+      const delta = tempC - targetC;
+      if (hasFault || delta >= TEMP_FAULT_DELTA) return "temp-fault";
+      if (delta <= TEMP_COLD_BAND) return "temp-cold";
+      if (Math.abs(delta) <= TEMP_NEAR_BAND) return "temp-neutral";
+      if (delta >= TEMP_HOT_BAND) return "temp-hot";
+      return "temp-neutral";
+    }
+
+    function modeToClass(mode, hasFault) {
+      if (hasFault) return "mode-fault";
+      if (mode === "CHARGE") return "mode-charge";
+      if (mode === "DISCHARGE") return "mode-discharge";
+      if (mode === "FROST_PROTECT") return "mode-charge";
+      return "mode-idle";
+    }
+
+    function rssiToBars(rssi) {
+      if (rssi == null) return 0;
+      const v = Number(rssi);
+      if (v >= -55) return 4;
+      if (v >= -65) return 3;
+      if (v >= -75) return 2;
+      if (v >= -85) return 1;
+      return 0;
+    }
+
+    function alertToast(type, message) {
+      const toast = document.getElementById("toast");
+      const icon = document.getElementById("toast-icon");
+      const msg  = document.getElementById("toast-msg");
+
+      const classes = ["toast-info","toast-cold","toast-heat","toast-warn","toast-fault"];
+      classes.forEach(c => toast.classList.remove(c));
+
+      let iconChar = "i";
+      switch (String(type).toLowerCase()) {
+        case "success":
+          iconChar = "OK";
+          toast.classList.add("toast-heat");
+          break;
+        case "error":
+          iconChar = "ERR";
+          toast.classList.add("toast-fault");
+          break;
+        case "warning":
+          iconChar = "WARN";
+          toast.classList.add("toast-warn");
+          break;
+        case "cold":
+          iconChar = "COLD";
+          toast.classList.add("toast-cold");
+          break;
+        case "heat":
+          iconChar = "HEAT";
+          toast.classList.add("toast-heat");
+          break;
+        default:
+          iconChar = "i";
+          toast.classList.add("toast-info");
+      }
+
+      icon.textContent = iconChar;
+      msg.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    async function loadInfo() {
+      try {
+        const r = await fetch("/info.json", { cache: "no-store" });
+        const j = await r.json();
+        document.getElementById("deviceName").textContent = j.deviceName || "BattBrrr";
+        document.getElementById("deviceIp").textContent = "IP: " + (j.ip || "?");
+        const bars = rssiToBars(j.rssi);
+        const icon = document.getElementById("wifiIcon");
+        icon.setAttribute("data-bars", String(bars));
+        const rssiVal = (j.rssi != null) ? String(j.rssi) : "?";
+        icon.setAttribute("title", "RSSI: " + rssiVal + " dBm");
+      } catch {
+        document.getElementById("deviceIp").textContent = "IP: ?";
+        const icon = document.getElementById("wifiIcon");
+        icon.setAttribute("data-bars", "0");
+        icon.setAttribute("title", "RSSI: ? dBm");
+      }
+    }
+
+    function renderSensors(list, targetC, hasFault) {
+      const container = document.getElementById("sensorList");
+      container.innerHTML = "";
+      if (!list || !list.length) {
+        container.innerHTML = '<div class="sensor-item"><div class="sensor-meta">No sensors detected</div></div>';
+        return;
+      }
+      list.forEach(s => {
+        const temp = (s.temp_c == null) ? null : Number(s.temp_c);
+        const tempClass = tempToClass(temp, targetC, hasFault);
+        const tempLabel = (temp == null || !Number.isFinite(temp)) ? "--" : (temp.toFixed(2) + " C");
+        const valid = s.valid ? "valid" : "invalid";
+        const role = s.role || "unused";
+        const el = document.createElement("div");
+        el.className = "sensor-item " + tempClass;
+        el.innerHTML = ''
+          + '<div class="sensor-head">'
+          + '<div class="sensor-name">' + (s.name || s.id) + '</div>'
+          + '<span class="badge ' + (s.valid ? "ok" : "err") + '">' + valid + '</span>'
+          + '</div>'
+          + '<div class="sensor-meta ' + tempClass + '">' + role + ' - ' + tempLabel + ' - errors: ' + (s.errors || 0) + '</div>';
+        container.appendChild(el);
+      });
+    }
+
+    function listToText(arr) {
+      if (!arr || !arr.length) return "None";
+      return arr.join(", ");
+    }
+
+    let currentEnabled = false;
+    let currentMode = "IDLE";
+
+    async function loadStatus() {
+      try {
+        const r = await fetch("/status.json", { cache: "no-store" });
+        const j = await r.json();
+
+        const ctrl = j.controller || {};
+        currentEnabled = !!ctrl.enabled;
+        currentMode = ctrl.mode || "IDLE";
+
+        const faults = j.faults || {};
+        const hasFault = (faults.active && faults.active.length) || (faults.latched && faults.latched.length);
+        const targetC = Number(ctrl.target_c);
+
+        const modeBadge = document.getElementById("modeValue");
+        modeBadge.textContent = currentMode;
+        modeBadge.className = "badge mode-badge " + modeToClass(currentMode, hasFault);
+
+        document.getElementById("targetValue").textContent = Number.isFinite(targetC) ? targetC.toFixed(2) + " C" : "--";
+        document.getElementById("outputValue").textContent = (ctrl.output_pct != null) ? Number(ctrl.output_pct).toFixed(1) + " %" : "--";
+
+        const controlTemp = (ctrl.control_temp_c != null) ? Number(ctrl.control_temp_c) : NaN;
+        const controlClass = tempToClass(controlTemp, targetC, hasFault);
+        const controlTempEl = document.getElementById("controlTempValue");
+        controlTempEl.textContent = Number.isFinite(controlTemp) ? controlTemp.toFixed(2) + " C" : "--";
+        controlTempEl.className = "kv-val " + controlClass;
+
+        document.getElementById("sourceValue").textContent = ctrl.using_bms ? "BMS" : "DS18B20";
+
+        const badge = document.getElementById("enabledBadge");
+        badge.textContent = currentEnabled ? "ENABLED" : "DISABLED";
+        badge.className = "badge " + (currentEnabled ? "ok" : "warn");
+
+        const mqtt = j.mqtt || {};
+        document.getElementById("mqttValue").textContent =
+          mqtt.connected ? "Connected" : (mqtt.enabled ? "Disconnected" : "Disabled");
+
+        document.getElementById("faultActive").textContent = listToText(faults.active);
+        document.getElementById("faultLatched").textContent = listToText(faults.latched);
+        document.getElementById("faultLast").textContent = faults.last_code || "None";
+
+        document.getElementById("toggleEnableBtn").textContent = currentEnabled ? "Disable" : "Enable";
+        document.getElementById("modeSelect").value = ctrl.requested_mode || currentMode;
+
+        renderSensors((j.temps && j.temps.sensors) ? j.temps.sensors : [], targetC, hasFault);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document.getElementById("toggleEnableBtn").addEventListener("click", async () => {
+      try {
+        const body = "enabled=" + (currentEnabled ? 0 : 1);
+        const res = await fetch("/action/enable", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body
+        });
+        if (res.ok) alertToast("success", "Enable updated.");
+        else alertToast("error", "Failed to update enable.");
+      } catch {
+        alertToast("error", "Enable request failed.");
+      }
+    });
+
+    document.getElementById("modeSelect").addEventListener("change", async (e) => {
+      try {
+        const body = "mode=" + encodeURIComponent(e.target.value);
+        const res = await fetch("/action/mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body
+        });
+        if (res.ok) alertToast("success", "Mode updated.");
+        else alertToast("error", "Failed to update mode.");
+      } catch {
+        alertToast("error", "Mode request failed.");
+      }
+    });
+
+    document.getElementById("rescanBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/action/rescan", { method: "POST" });
+        if (res.ok) alertToast("cold", "Rescan started.");
+      } catch {}
+    });
+
+    document.getElementById("resetFaultBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/action/reset_fault", { method: "POST" });
+        if (res.ok) alertToast("success", "Fault reset requested.");
+      } catch {}
+    });
+
+    const outputModal = document.getElementById("outputModal");
+    document.getElementById("outputTestBtn").addEventListener("click", () => {
+      outputModal.classList.add("show");
+    });
+    document.getElementById("outputModalClose").addEventListener("click", () => {
+      outputModal.classList.remove("show");
+    });
+    document.getElementById("startTestBtn").addEventListener("click", async () => {
+      const pct = Number(document.getElementById("testPct").value || 0);
+      const duration = Number(document.getElementById("testDuration").value || 0);
+      try {
+        const body = "pct=" + encodeURIComponent(pct) + "&duration_s=" + encodeURIComponent(duration);
+        const res = await fetch("/action/output_test", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body
+        });
+        if (res.ok) {
+          alertToast("heat", "Output test started.");
+          outputModal.classList.remove("show");
+        } else {
+          alertToast("error", "Output test rejected.");
+        }
+      } catch {
+        alertToast("error", "Output test failed.");
+      }
+    });
+
+    loadInfo();
+    loadStatus();
+    setInterval(loadStatus, 2000);
+    setInterval(loadInfo, 10000);
+  </script>
+  <script src="/footer.js"></script>
+</body>
+</html>

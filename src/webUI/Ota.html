@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>BattBrrr - OTA</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+
+  <div id="container">
+    <div id="header">
+      <a href="/"><img id="logo" src="/logo.svg" alt="Logo" /></a>
+      <h1>Firmware Update</h1>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Manual OTA</div>
+      <label for="fwFile">Firmware .bin</label>
+      <input type="file" id="fwFile" accept=".bin" />
+      <div class="progress-wrap">
+        <div class="progress-bar"><span id="uploadBar"></span></div>
+        <div class="progress-label">
+          <span id="uploadPct">0%</span>
+          <span id="uploadInfo">Ready</span>
+        </div>
+      </div>
+      <div class="actions-row actions">
+        <button class="btn" id="uploadBtn">Upload Firmware</button>
+      </div>
+      <div class="note">Device will reboot automatically after a successful update.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">GitHub OTA</div>
+
+      <div class="actions-row actions">
+        <button class="btn btn-outline" id="checkGhBtn">Check Release</button>
+        <button class="btn" id="updateGhBtn">Update</button>
+      </div>
+
+      <div class="detailSplitter">Release Status</div>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">State</span><span class="kv-val" id="ghState">--</span></div>
+        <div class="kv-row"><span class="kv-key">Update</span><span class="kv-val" id="ghUpdate">--</span></div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar"><span id="ghBar"></span></div>
+        <div class="progress-label">
+          <span id="ghPct">0%</span>
+          <span id="ghBytes">--</span>
+        </div>
+      </div>
+      <div class="note" id="ghError">--</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Menu</div>
+      <div class="button-stack">
+        <button class="btn btn-outline" onclick="location.href='/'">Status</button>
+        <button class="btn btn-outline" onclick="location.href='/autotune'">PID Autotune</button>
+        <button class="btn btn-outline" onclick="location.href='/config'">Configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"><span id="toast-icon">i</span><span id="toast-msg">Placeholder</span></div>
+  <div class="page-footer" id="fwFooter">Firmware v?</div>
+
+  <script src="/backgroundCanvas.js"></script>
+  <script>
+    function alertToast(type, message) {
+      const toast = document.getElementById("toast");
+      const icon = document.getElementById("toast-icon");
+      const msg  = document.getElementById("toast-msg");
+
+      const classes = ["toast-info","toast-cold","toast-heat","toast-warn","toast-fault"];
+      classes.forEach(c => toast.classList.remove(c));
+
+      let iconChar = "i";
+      switch (String(type).toLowerCase()) {
+        case "success":
+          iconChar = "OK";
+          toast.classList.add("toast-heat");
+          break;
+        case "error":
+          iconChar = "ERR";
+          toast.classList.add("toast-fault");
+          break;
+        case "warning":
+          iconChar = "WARN";
+          toast.classList.add("toast-warn");
+          break;
+        default:
+          iconChar = "i";
+          toast.classList.add("toast-info");
+      }
+
+      icon.textContent = iconChar;
+      msg.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    function setUploadProgress(pct, text) {
+      document.getElementById("uploadBar").style.width = pct + "%";
+      document.getElementById("uploadPct").textContent = pct + "%";
+      document.getElementById("uploadInfo").textContent = text || "";
+    }
+
+    document.getElementById("uploadBtn").addEventListener("click", () => {
+      const file = document.getElementById("fwFile").files[0];
+      if (!file) {
+        alertToast("warning", "Select a firmware file first.");
+        return;
+      }
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/ota/upload", true);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+          setUploadProgress(pct, e.loaded + " / " + e.total + " bytes");
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          setUploadProgress(100, "Uploaded");
+          alertToast("success", "Firmware uploaded. Rebooting...");
+        } else {
+          alertToast("error", "Upload failed.");
+        }
+      };
+      xhr.onerror = () => {
+        alertToast("error", "Upload error.");
+      };
+      setUploadProgress(0, "Uploading...");
+      const data = new FormData();
+      data.append("firmware", file, file.name);
+      xhr.send(data);
+    });
+
+    document.getElementById("checkGhBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/ota/github/check", { method: "POST" });
+        if (res.ok) alertToast("success", "Check started.");
+        else alertToast("error", "Check failed.");
+      } catch {
+        alertToast("error", "Check request failed.");
+      }
+    });
+
+    document.getElementById("updateGhBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/ota/github/update", { method: "POST" });
+        if (res.ok) alertToast("heat", "Update started.");
+        else alertToast("error", "Update request failed.");
+      } catch {
+        alertToast("error", "Update request failed.");
+      }
+    });
+
+    function setGhProgress(pct, bytesText) {
+      document.getElementById("ghBar").style.width = pct + "%";
+      document.getElementById("ghPct").textContent = pct + "%";
+      document.getElementById("ghBytes").textContent = bytesText || "--";
+    }
+
+    async function loadGhStatus() {
+      try {
+        const r = await fetch("/api/ota/github/status", { cache: "no-store" });
+        const j = await r.json();
+
+        document.getElementById("ghState").textContent = j.state_str || "--";
+        document.getElementById("ghUpdate").textContent = j.update_available ? "AVAILABLE" : "N/A";
+        document.getElementById("ghError").textContent = j.error || "--";
+
+        const pct = j.progress_pct || 0;
+        const bytes = (j.bytes_done || 0) + " / " + (j.bytes_total || 0) + " bytes";
+        setGhProgress(pct, bytes);
+
+        const updateBtn = document.getElementById("updateGhBtn");
+        const busy = j.state_str === "CHECKING" || j.state_str === "DOWNLOADING" || j.state_str === "APPLYING";
+        updateBtn.disabled = busy || !j.update_available;
+      } catch {}
+    }
+
+    loadGhStatus();
+    setInterval(loadGhStatus, 3000);
+  </script>
+  <script src="/footer.js"></script>
+</body>
+</html>

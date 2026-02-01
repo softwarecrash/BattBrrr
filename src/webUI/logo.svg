@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Cold to heat battery heater logo">
+  <defs>
+    <!-- Brand gradient: cold -> heat -->
+    <linearGradient id="gColdHeat" x1="72" y1="256" x2="440" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#39C6FF"/>
+      <stop offset="0.48" stop-color="#7A5CFF"/>
+      <stop offset="0.80" stop-color="#FF7A18"/>
+      <stop offset="1" stop-color="#FF3B3B"/>
+    </linearGradient>
+
+    <linearGradient id="gShine" x1="256" y1="96" x2="256" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EAF2FF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#EAF2FF" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="fGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="clipInner">
+      <rect x="96" y="124" width="320" height="264" rx="48"/>
+    </clipPath>
+  </defs>
+
+  <!-- Battery body -->
+  <rect x="72" y="96" width="368" height="320" rx="72"
+        fill="#0D1420" stroke="#1B2A3A" stroke-width="10"/>
+
+  <!-- Battery top cap -->
+  <rect x="220" y="68" width="72" height="40" rx="16"
+        fill="#0D1420" stroke="#1B2A3A" stroke-width="10"/>
+
+  <!-- Minus pole (left) -->
+  <g transform="translate(170 88)">
+    <rect x="-22" y="-10" width="44" height="20" rx="6"
+          fill="#8AA4C2"/>
+    <rect x="-18" y="-4" width="36" height="8" rx="4"
+          fill="#0B3A53"/>
+  </g>
+
+  <!-- Plus pole (right) -->
+  <g transform="translate(342 88)">
+    <rect x="-22" y="-10" width="44" height="20" rx="6"
+          fill="#FF7A18"/>
+    <rect x="-4" y="-18" width="8" height="36" rx="4"
+          fill="#0D1420"/>
+    <rect x="-18" y="-4" width="36" height="8" rx="4"
+          fill="#0D1420"/>
+  </g>
+
+  <!-- Inner active area -->
+  <g clip-path="url(#clipInner)">
+    <rect x="96" y="124" width="320" height="264" rx="48" fill="url(#gColdHeat)"/>
+    <rect x="96" y="124" width="320" height="264" rx="48" fill="url(#gShine)"/>
+    <!-- subtle center divider -->
+    <rect x="252" y="124" width="8" height="264" fill="#070A0F" opacity="0.35"/>
+  </g>
+
+  <!-- Cold icon -->
+  <g transform="translate(176 256)" filter="url(#fGlow)">
+    <g fill="none" stroke="#EAF2FF" stroke-linecap="round" stroke-width="14">
+      <path d="M0 -70 V70"/>
+      <path d="M-70 0 H70"/>
+      <path d="M-50 -50 L50 50"/>
+      <path d="M50 -50 L-50 50"/>
+    </g>
+    <circle r="10" fill="#EAF2FF"/>
+  </g>
+
+  <!-- Heat icon -->
+  <g transform="translate(336 260)" filter="url(#fGlow)">
+    <path d="M0,78
+             C42,48 48,18 30,-8
+             C20,-28 22,-50 34,-72
+             C-4,-56 -18,-30 -14,-4
+             C-40,-20 -56,6 -52,34
+             C-48,68 -20,86 0,78Z"
+          fill="#EAF2FF"/>
+    <path d="M0,58
+             C20,44 24,26 14,10
+             C8,-2 10,-20 18,-36
+             C-2,-28 -10,-12 -8,6
+             C-20,-4 -30,10 -28,28
+             C-26,50 -12,62 0,58Z"
+          fill="#0D1420" opacity="0.55"/>
+  </g>
+
+  <!-- Outer accent -->
+  <rect x="72" y="96" width="368" height="320" rx="72"
+        fill="none" stroke="#39C6FF" stroke-width="4" opacity="0.22"/>
+</svg>

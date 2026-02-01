@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>BattBrrr - PID Autotune</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+
+  <div id="container">
+    <div id="header">
+      <a href="/"><img id="logo" src="/logo.svg" alt="Logo" /></a>
+      <h1>PID Autotune</h1>
+    </div>
+
+    <div class="panel" id="autotuneStartPanel">
+      <div class="panel-title">Autotune Control</div>
+      <div class="actions-row actions">
+        <button class="btn" id="startBtn">Start Autotune</button>
+      </div>
+      <div class="note">Autotune cycles heater output automatically. Ensure a safe setup.</div>
+    </div>
+
+    <div class="panel hidden" id="autotuneStatusPanel">
+      <div class="panel-title">Status</div>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Phase</span><span class="kv-val" id="phaseValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Elapsed</span><span class="kv-val" id="elapsedValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Progress</span><span class="kv-val" id="progressValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Temp</span><span class="kv-val temp-neutral" id="tempValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Target</span><span class="kv-val" id="targetValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Output</span><span class="kv-val heat-text" id="outputValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Class</span><span class="kv-val" id="classValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Rate</span><span class="kv-val" id="rateValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Cycles</span><span class="kv-val" id="cycleValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Last Error</span><span class="kv-val" id="errorValue">--</span></div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar"><span id="progressBar"></span></div>
+        <div class="progress-label">
+          <span id="progressPct">0%</span>
+          <span id="progressMeta">--</span>
+        </div>
+      </div>
+      <div class="actions-row actions">
+        <button class="btn btn-outline" id="abortBtn">Abort</button>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="autotuneResultPanel">
+      <div class="panel-title">Result</div>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Kp</span><span class="kv-val" id="kpValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Ki</span><span class="kv-val" id="kiValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Kd</span><span class="kv-val" id="kdValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Rule</span><span class="kv-val" id="ruleValue">--</span></div>
+        <div class="kv-row"><span class="kv-key">Quality</span><span class="kv-val" id="qualityValue">--</span></div>
+      </div>
+      <div class="actions-row actions">
+        <button class="btn" id="commitBtn">Save PID</button>
+        <button class="btn btn-outline" id="discardBtn">Discard</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Menu</div>
+      <div class="button-stack">
+        <button class="btn btn-outline" onclick="location.href='/'">Status</button>
+        <button class="btn btn-outline" onclick="location.href='/ota'">Firmware Update</button>
+        <button class="btn btn-outline" onclick="location.href='/config'">Configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"><span id="toast-icon">i</span><span id="toast-msg">Placeholder</span></div>
+
+  <div class="modal-backdrop" id="startModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Start PID Autotune</div>
+        <button class="modal-close" id="modalClose">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="note">Heater output will cycle automatically during autotune.</div>
+        <div class="note">Make sure thermal safety features are active.</div>
+        <label>
+          <input type="checkbox" id="autoSave" />
+          Auto-save PID when finished
+        </label>
+        <label for="aggrSelect">Aggressiveness</label>
+        <select id="aggrSelect">
+          <option value="conservative" selected>conservative</option>
+          <option value="normal">normal</option>
+          <option value="aggressive">aggressive</option>
+        </select>
+        <label for="maxDuration">Max duration (s, optional)</label>
+        <input type="number" id="maxDuration" step="1" placeholder="0 = auto" />
+        <div class="actions actions-row">
+          <button class="btn" id="confirmStart">Start</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer" id="fwFooter">Firmware v?</div>
+
+  <script src="/backgroundCanvas.js"></script>
+  <script>
+    function alertToast(type, message) {
+      const toast = document.getElementById("toast");
+      const icon = document.getElementById("toast-icon");
+      const msg  = document.getElementById("toast-msg");
+
+      const classes = ["toast-info","toast-cold","toast-heat","toast-warn","toast-fault"];
+      classes.forEach(c => toast.classList.remove(c));
+
+      let iconChar = "i";
+      switch (String(type).toLowerCase()) {
+        case "success":
+          iconChar = "OK";
+          toast.classList.add("toast-heat");
+          break;
+        case "error":
+          iconChar = "ERR";
+          toast.classList.add("toast-fault");
+          break;
+        case "warning":
+          iconChar = "WARN";
+          toast.classList.add("toast-warn");
+          break;
+        default:
+          iconChar = "i";
+          toast.classList.add("toast-info");
+      }
+
+      icon.textContent = iconChar;
+      msg.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    const startModal = document.getElementById("startModal");
+    document.getElementById("startBtn").addEventListener("click", () => {
+      startModal.classList.add("show");
+    });
+    document.getElementById("modalClose").addEventListener("click", () => {
+      startModal.classList.remove("show");
+    });
+
+    document.getElementById("confirmStart").addEventListener("click", async () => {
+      const payload = {
+        auto_save: document.getElementById("autoSave").checked,
+        aggressiveness: document.getElementById("aggrSelect").value,
+        max_duration_s: Number(document.getElementById("maxDuration").value || 0)
+      };
+      try {
+        const res = await fetch("/api/heater/autotune/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          alertToast("success", "Autotune started.");
+          startModal.classList.remove("show");
+        } else {
+          alertToast("error", "Start failed.");
+        }
+      } catch {
+        alertToast("error", "Start request failed.");
+      }
+    });
+
+    document.getElementById("abortBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/heater/autotune/abort", { method: "POST" });
+        if (res.ok) alertToast("warning", "Autotune aborted.");
+      } catch {}
+    });
+
+    document.getElementById("commitBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/heater/autotune/commit", { method: "POST" });
+        if (res.ok) alertToast("success", "PID saved.");
+        else alertToast("error", "Save failed.");
+      } catch {}
+    });
+
+    document.getElementById("discardBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/heater/autotune/discard", { method: "POST" });
+        if (res.ok) alertToast("info", "Result discarded.");
+      } catch {}
+    });
+
+    function tempToClass(tempC, targetC) {
+      if (!Number.isFinite(tempC) || !Number.isFinite(targetC)) return "temp-neutral";
+      const delta = tempC - targetC;
+      if (delta >= 8) return "temp-fault";
+      if (delta <= -1.5) return "temp-cold";
+      if (Math.abs(delta) <= 0.8) return "temp-neutral";
+      if (delta >= 1.5) return "temp-hot";
+      return "temp-neutral";
+    }
+
+    function applyAutotuneVisibility(phase) {
+      const startPanel = document.getElementById("autotuneStartPanel");
+      const statusPanel = document.getElementById("autotuneStatusPanel");
+      const resultPanel = document.getElementById("autotuneResultPanel");
+      const abortBtn = document.getElementById("abortBtn");
+
+      const isRunning = phase === "PROBE_RUNNING" || phase === "TUNE_RUNNING";
+      const isFinished = phase === "FINISHED";
+
+      startPanel.classList.toggle("hidden", isRunning || isFinished);
+      statusPanel.classList.toggle("hidden", !isRunning && !isFinished);
+      resultPanel.classList.toggle("hidden", !isFinished);
+      abortBtn.disabled = !isRunning;
+    }
+
+    async function loadStatus() {
+      try {
+        const r = await fetch("/api/heater/autotune/status", { cache: "no-store" });
+        const j = await r.json();
+
+        document.getElementById("phaseValue").textContent = j.phase || "--";
+        document.getElementById("elapsedValue").textContent = (j.elapsed_s != null) ? (j.elapsed_s + " s") : "--";
+        document.getElementById("progressValue").textContent = (j.progress_pct != null) ? (j.progress_pct + " %") : "--";
+
+        const temp = (j.current_temp_c != null) ? Number(j.current_temp_c) : NaN;
+        const target = (j.target_c != null) ? Number(j.target_c) : NaN;
+        const tempEl = document.getElementById("tempValue");
+        tempEl.textContent = Number.isFinite(temp) ? temp.toFixed(2) + " C" : "--";
+        tempEl.className = "kv-val " + tempToClass(temp, target);
+
+        document.getElementById("targetValue").textContent = Number.isFinite(target) ? target.toFixed(2) + " C" : "--";
+        document.getElementById("outputValue").textContent = (j.output_pct != null) ? Number(j.output_pct).toFixed(1) + " %" : "--";
+        document.getElementById("classValue").textContent = j.detected_class || "--";
+        document.getElementById("rateValue").textContent = (j.measured_rate_c_per_min != null) ? Number(j.measured_rate_c_per_min).toFixed(3) + " C/min" : "--";
+        document.getElementById("cycleValue").textContent = (j.cycles != null) ? String(j.cycles) : "--";
+        document.getElementById("errorValue").textContent = j.last_error || "--";
+
+        const pct = j.progress_pct || 0;
+        document.getElementById("progressBar").style.width = pct + "%";
+        document.getElementById("progressPct").textContent = pct + "%";
+        document.getElementById("progressMeta").textContent = (j.sample_period_ms ? ("sample " + j.sample_period_ms + " ms") : "--");
+
+        if (j.result) {
+          document.getElementById("kpValue").textContent = (j.result.kp != null) ? Number(j.result.kp).toFixed(4) : "--";
+          document.getElementById("kiValue").textContent = (j.result.ki != null) ? Number(j.result.ki).toFixed(6) : "--";
+          document.getElementById("kdValue").textContent = (j.result.kd != null) ? Number(j.result.kd).toFixed(4) : "--";
+          document.getElementById("ruleValue").textContent = j.result.rule || "--";
+          document.getElementById("qualityValue").textContent = (j.result.quality != null) ? Number(j.result.quality).toFixed(1) + " %" : "--";
+        }
+
+        applyAutotuneVisibility(j.phase || "IDLE");
+      } catch {}
+    }
+
+    loadStatus();
+    setInterval(loadStatus, 2000);
+  </script>
+  <script src="/footer.js"></script>
+</body>
+</html>

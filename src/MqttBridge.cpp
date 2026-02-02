@@ -9,6 +9,39 @@
 
 namespace {
 constexpr uint32_t kReconnectIntervalMs = 3000;
+
+void publishJsonFlat(PubSubClient& client, const String& rootTopic, JsonVariant v, bool retain, const String& path = String()) {
+  if (v.is<JsonObject>()) {
+    JsonObject obj = v.as<JsonObject>();
+    for (JsonPair kv : obj) {
+      String next = path.length() ? (path + "/" + kv.key().c_str()) : String(kv.key().c_str());
+      publishJsonFlat(client, rootTopic, kv.value(), retain, next);
+    }
+    return;
+  }
+  if (v.is<JsonArray>()) {
+    JsonArray arr = v.as<JsonArray>();
+    for (size_t i = 0; i < arr.size(); ++i) {
+      String next = path.length() ? (path + "/" + String(i)) : String(i);
+      publishJsonFlat(client, rootTopic, arr[i], retain, next);
+    }
+    return;
+  }
+
+  String payload;
+  if (v.is<const char*>()) {
+    payload = v.as<const char*>();
+  } else {
+    serializeJson(v, payload);
+  }
+
+  String topic = rootTopic;
+  if (path.length()) {
+    topic += "/";
+    topic += path;
+  }
+  client.publish(topic.c_str(), payload.c_str(), retain);
+}
 }  // namespace
 
 MqttBridge::MqttBridge()
@@ -42,6 +75,7 @@ void MqttBridge::begin(Settings& settings, HeaterController& controller, TempMan
   _controller = &controller;
   _temps = &temps;
   applySettings(settings);
+  _client.setBufferSize(1024);
   _client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
     handleMessage(topic, payload, length);
   });
@@ -161,6 +195,10 @@ void MqttBridge::publishState(uint32_t nowMs) {
   StatusContext ctx = { _settings, _temps, _controller, this, nullptr, _autotune };
   String payload = buildStatusJson(ctx);
   _client.publish(buildTopic("heater/state").c_str(), payload.c_str(), _retain);
+  JsonDocument doc;
+  if (!deserializeJson(doc, payload)) {
+    publishJsonFlat(_client, buildTopic("heater/state"), doc.as<JsonVariant>(), _retain);
+  }
   _lastPublishMs = nowMs;
 
   if (_controller) {
@@ -173,12 +211,27 @@ void MqttBridge::publishState(uint32_t nowMs) {
   }
 
   if (_autotune) {
-    _client.publish(buildTopic("heater/autotune/state").c_str(), _autotune->buildMqttStateJson().c_str(), _retain);
-    _client.publish(buildTopic("heater/autotune/progress").c_str(), _autotune->buildMqttProgressJson().c_str(), _retain);
+    const String atState = _autotune->buildMqttStateJson();
+    const String atProgress = _autotune->buildMqttProgressJson();
+    _client.publish(buildTopic("heater/autotune/state").c_str(), atState.c_str(), _retain);
+    _client.publish(buildTopic("heater/autotune/progress").c_str(), atProgress.c_str(), _retain);
+    JsonDocument atDoc;
+    if (!deserializeJson(atDoc, atState)) {
+      publishJsonFlat(_client, buildTopic("heater/autotune/state"), atDoc.as<JsonVariant>(), _retain);
+    }
+    atDoc.clear();
+    if (!deserializeJson(atDoc, atProgress)) {
+      publishJsonFlat(_client, buildTopic("heater/autotune/progress"), atDoc.as<JsonVariant>(), _retain);
+    }
     const uint32_t rid = _autotune->resultId();
     if (rid != _lastAutotuneResultId) {
       _lastAutotuneResultId = rid;
-      _client.publish(buildTopic("heater/autotune/result").c_str(), _autotune->buildMqttResultJson().c_str(), _retain);
+      const String atResult = _autotune->buildMqttResultJson();
+      _client.publish(buildTopic("heater/autotune/result").c_str(), atResult.c_str(), _retain);
+      atDoc.clear();
+      if (!deserializeJson(atDoc, atResult)) {
+        publishJsonFlat(_client, buildTopic("heater/autotune/result"), atDoc.as<JsonVariant>(), _retain);
+      }
     }
   }
 }
@@ -476,4 +529,5 @@ void MqttBridge::publishEvent(const String& type, const String& detail) {
   String out;
   serializeJson(doc, out);
   _client.publish(buildTopic("heater/event").c_str(), out.c_str(), _retain);
+  publishJsonFlat(_client, buildTopic("heater/event"), doc.as<JsonVariant>(), _retain);
 }

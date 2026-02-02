@@ -622,7 +622,8 @@ String PidAutotune::buildStatusJson() const {
   doc["detected_class"] = classToString(_detected);
   doc["measured_rate_c_per_min"] = _measuredRateCPerMin;
   doc["target_c"] = _targetC;
-  doc["output_pct"] = _outputPct;
+  // During probe phase the active output comes from _probeOutputPct.
+  doc["output_pct"] = (_phase == Phase::PROBE_RUNNING) ? _probeOutputPct : _outputPct;
   doc["noise_band_c"] = _noiseBandC;
   doc["sample_period_ms"] = _samplePeriodMs;
   doc["required_cycles"] = _requiredCycles;
@@ -692,7 +693,8 @@ String PidAutotune::buildMqttProgressJson() const {
   doc["phase"] = phaseToString(_phase);
   doc["elapsed_s"] = _startMs ? (millis() - _startMs) / 1000UL : 0;
   doc["target_c"] = _targetC;
-  doc["output_pct"] = _outputPct;
+  // During probe phase the active output comes from _probeOutputPct.
+  doc["output_pct"] = (_phase == Phase::PROBE_RUNNING) ? _probeOutputPct : _outputPct;
   doc["noise_band_c"] = _noiseBandC;
   doc["sample_period_ms"] = _samplePeriodMs;
   doc["measured_rate_c_per_min"] = _measuredRateCPerMin;

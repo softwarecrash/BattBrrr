@@ -60,12 +60,17 @@ Base topic: `mqttBaseTopic` (default `battbrrr`).
 | Direction | Topic | Payload | Notes |
 |---|---|---|---|
 | Publish | `<base>/heater/state` | JSON | temps, roles, mode, enabled, target, output, faults, wifi/mqtt, uptime |
+| Publish | `<base>/heater/state/...` | values | Flattened per-field topics (mirrors JSON tree) |
 | Publish | `<base>/heater/event` | JSON | `{type, detail, ts_ms}` |
+| Publish | `<base>/heater/event/...` | values | Flattened per-field topics |
 | Publish | `<base>/heater/autotune/state` | JSON | phase, progress, class, rate |
+| Publish | `<base>/heater/autotune/state/...` | values | Flattened per-field topics |
 | Publish | `<base>/heater/autotune/progress` | JSON | progress + current values |
+| Publish | `<base>/heater/autotune/progress/...` | values | Flattened per-field topics |
 | Publish | `<base>/heater/autotune/result` | JSON | PID result + quality |
+| Publish | `<base>/heater/autotune/result/...` | values | Flattened per-field topics |
 | Subscribe | `<base>/heater/cmd/enable` | `true/false` or `1/0` | Enable controller |
-| Subscribe | `<base>/heater/cmd/mode` | `IDLE/CHARGE/DISCHARGE/FROST_PROTECT/MANUAL` or `0..4` | Set mode |
+| Subscribe | `<base>/heater/cmd/mode` | `IDLE/CHARGE/DISCHARGE/FROST_PROTECT/MANUAL` or `0..4` | Set mode (aliases: `standby`, `stationary` -> `IDLE`) |
 | Subscribe | `<base>/heater/cmd/target_idle` | float | Target in C |
 | Subscribe | `<base>/heater/cmd/target_charge` | float | Target in C |
 | Subscribe | `<base>/heater/cmd/target_discharge` | float | Target in C |
@@ -83,7 +88,7 @@ Configured via UI:
 - `bmsStateTopic` -> maps `charge/discharge/idle` to modes
 - `bmsTempTopic` -> optional temperature fallback
 - Optional JSON paths (dot notation): `bmsStatePath`, `bmsTempPath`
-- Timeout: `bmsTimeoutS`
+- Timeout: `bmsTimeoutS` (max age in seconds for last received BMS state/temp)
 
 ## GPIO Notes
 - Heater output pin must be a valid ESP32 output pin

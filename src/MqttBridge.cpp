@@ -459,7 +459,7 @@ ControlMode MqttBridge::modeFromPayload(const String& payload) const {
   v.toLowerCase();
   if (v == "charge" || v == "charging") return ControlMode::CHARGE;
   if (v == "discharge" || v == "discharging") return ControlMode::DISCHARGE;
-  if (v == "idle" || v == "standby") return ControlMode::IDLE;
+  if (v == "idle" || v == "standby" || v == "stationary") return ControlMode::IDLE;
   if (v == "frost" || v == "frost_protect") return ControlMode::FROST_PROTECT;
   if (v == "manual") return ControlMode::MANUAL;
   if (v == "0") return ControlMode::IDLE;

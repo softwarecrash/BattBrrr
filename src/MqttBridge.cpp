@@ -55,6 +55,7 @@ MqttBridge::MqttBridge()
     _keepaliveS(30),
     _publishIntervalS(5),
     _retain(false),
+    _bmsEnable(false),
     _bmsTimeoutS(60),
     _lastConnectAttemptMs(0),
     _lastConnectedMs(0),
@@ -97,6 +98,7 @@ void MqttBridge::applySettings(Settings& settings) {
   _publishIntervalS = settings.get.mqttPublishS();
   _retain = settings.get.mqttRetain();
 
+  _bmsEnable = settings.get.bmsEnable();
   _bmsStateTopic = settings.get.bmsStateTopic();
   _bmsTempTopic = settings.get.bmsTempTopic();
   _bmsStatePath = settings.get.bmsStatePath();
@@ -179,10 +181,10 @@ void MqttBridge::subscribeTopics() {
   _client.subscribe(buildTopic("heater/cmd/autotune_abort").c_str());
   _client.subscribe(buildTopic("heater/cmd/autotune_commit").c_str());
 
-  if (_bmsStateTopic.length()) {
+  if (_bmsEnable && _bmsStateTopic.length()) {
     _client.subscribe(_bmsStateTopic.c_str());
   }
-  if (_bmsTempTopic.length()) {
+  if (_bmsEnable && _bmsTempTopic.length()) {
     _client.subscribe(_bmsTempTopic.c_str());
   }
 }
@@ -263,7 +265,7 @@ void MqttBridge::handleMessage(char* topic, uint8_t* payload, unsigned int lengt
   }
   payloadStr.trim();
 
-  if (topicStr == _bmsStateTopic) {
+  if (_bmsEnable && topicStr == _bmsStateTopic) {
     String extracted;
     if (extractJsonPath(payloadStr, _bmsStatePath, &extracted)) {
       ControlMode mode = modeFromPayload(extracted);
@@ -278,7 +280,7 @@ void MqttBridge::handleMessage(char* topic, uint8_t* payload, unsigned int lengt
     return;
   }
 
-  if (topicStr == _bmsTempTopic) {
+  if (_bmsEnable && topicStr == _bmsTempTopic) {
     String extracted;
     if (extractJsonPath(payloadStr, _bmsTempPath, &extracted)) {
       float temp = NAN;
@@ -495,6 +497,7 @@ uint32_t MqttBridge::lastConnectMs() const {
 }
 
 bool MqttBridge::bmsTempValid(uint32_t nowMs) const {
+  if (!_bmsEnable) return false;
   if (!_bmsTempTopic.length()) return false;
   if (!_bmsTempValid) return false;
   const uint32_t timeoutMs = static_cast<uint32_t>(_bmsTimeoutS) * 1000UL;
@@ -506,6 +509,7 @@ float MqttBridge::bmsTempC() const {
 }
 
 bool MqttBridge::bmsModeValid(uint32_t nowMs) const {
+  if (!_bmsEnable) return false;
   if (!_bmsStateTopic.length()) return false;
   if (!_bmsModeValid) return false;
   const uint32_t timeoutMs = static_cast<uint32_t>(_bmsTimeoutS) * 1000UL;

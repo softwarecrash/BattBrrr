@@ -642,10 +642,7 @@
         setValue("bmsTimeoutS", c.bmsTimeoutS);
         setValue("bmsFallback", c.bmsFallback ? 1 : 0);
 
-        const bmsActive = Boolean((c.bmsStateTopic && String(c.bmsStateTopic).trim().length)
-          || (c.bmsTempTopic && String(c.bmsTempTopic).trim().length)
-          || c.bmsFallback);
-        setValue("bmsEnable", bmsActive ? 1 : 0);
+        setValue("bmsEnable", c.bmsEnable ? 1 : 0);
 
         renderSensors(c.sensors || []);
       } catch {
@@ -742,6 +739,7 @@
         bmsTempPath: document.getElementById("bmsTempPath").value.trim(),
         bmsTimeoutS: Number(document.getElementById("bmsTimeoutS").value),
         bmsFallback: document.getElementById("bmsFallback").value === "1",
+        bmsEnable: document.getElementById("bmsEnable").value === "1",
 
         sensors: collectSensors()
       };

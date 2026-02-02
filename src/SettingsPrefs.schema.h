@@ -95,6 +95,7 @@
   X(BOOL,   "mqtt",      "mqttRetain",         mqttRetain,       false,           0,     0) \
   \
   /* ---- BMS section ---- */ \
+  X(BOOL,   "bms",       "bmsEnable",         bmsEnable,        false,           0,     0) \
   X(STRING, "bms",       "bmsStateTopic",      bmsStateTopic,    "",              0,     0) \
   X(STRING, "bms",       "bmsTempTopic",       bmsTempTopic,     "",              0,     0) \
   X(STRING, "bms",       "bmsStatePath",       bmsStatePath,     "",              0,     0) \

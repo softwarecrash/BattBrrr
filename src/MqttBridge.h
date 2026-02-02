@@ -67,6 +67,7 @@ private:
   uint16_t _keepaliveS;
   uint16_t _publishIntervalS;
   bool _retain;
+  bool _bmsEnable;
 
   String _bmsStateTopic;
   String _bmsTempTopic;

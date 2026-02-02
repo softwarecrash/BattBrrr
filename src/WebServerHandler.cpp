@@ -229,6 +229,7 @@ void WebServerHandler::handleConfigGet(AsyncWebServerRequest* req) {
   doc["bmsTempPath"] = settings.get.bmsTempPath();
   doc["bmsTimeoutS"] = settings.get.bmsTimeoutS();
   doc["bmsFallback"] = settings.get.bmsFallback();
+  doc["bmsEnable"] = settings.get.bmsEnable();
 
   JsonArray sensorsArr = doc["sensors"].to<JsonArray>();
   for (const auto& sensor : tempManager.sensors()) {
@@ -348,6 +349,7 @@ void WebServerHandler::handleConfigPost(AsyncWebServerRequest* req, const String
   APPLY_IF("bmsTempPath", settings.set.bmsTempPath(v.as<String>()));
   APPLY_IF("bmsTimeoutS", settings.set.bmsTimeoutS(v.as<uint16_t>()));
   APPLY_IF("bmsFallback", settings.set.bmsFallback(v.as<bool>()));
+  APPLY_IF("bmsEnable", settings.set.bmsEnable(v.as<bool>()));
 
   const JsonVariant sensorsVar = doc["sensors"];
   const bool hasSensors = !sensorsVar.isNull();

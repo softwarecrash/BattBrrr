@@ -103,7 +103,7 @@ void HeaterController::applySettings(Settings& settings) {
   _cfg.runawayLatch = settings.get.runawayLatch();
   _cfg.mqttLossMode = failsafeFromInt(settings.get.mqttLossMode());
   _cfg.mqttTimeoutMs = static_cast<uint32_t>(settings.get.mqttTimeoutS()) * 1000UL;
-  _cfg.bmsFallback = settings.get.bmsFallback();
+  _cfg.bmsFallback = settings.get.bmsEnable() ? settings.get.bmsFallback() : false;
   _cfg.outputType = outputTypeFromInt(settings.get.heaterOutType());
   _cfg.outputInvert = settings.get.heaterOutInvert();
   _cfg.outputPin = settings.get.heaterOutPin();

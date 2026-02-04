@@ -160,6 +160,8 @@ private:
   float _pidLastDeriv;
   uint32_t _lastControlMs;
   bool _hystState;
+  uint32_t _lastModeChangeMs;
+  bool _runawayWaitForCooling;
 
   uint32_t _outputLastChangeMs;
   uint32_t _windowStartMs;

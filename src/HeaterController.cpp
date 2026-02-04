@@ -9,6 +9,7 @@
 namespace {
 constexpr uint8_t kPwmChannel = 0;
 constexpr uint8_t kRunawayMaxSamples = 12;
+constexpr uint32_t kRunawayModeChangeGraceMs = 60000;
 }  // namespace
 
 HeaterController::HeaterController()
@@ -32,6 +33,8 @@ HeaterController::HeaterController()
     _pidLastDeriv(0.0f),
     _lastControlMs(0),
     _hystState(false),
+    _lastModeChangeMs(0),
+    _runawayWaitForCooling(false),
     _outputLastChangeMs(0),
     _windowStartMs(0),
     _pwmChannel(kPwmChannel),
@@ -451,7 +454,9 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
     _stuckActive = false;
   }
 
-  if (_cfg.runawayEnable && _controlTempValid && _appliedPct > 0.0f) {
+  bool runawayRateValid = false;
+  float runawayRate = 0.0f;
+  if (_cfg.runawayEnable && _controlTempValid) {
     if (_lastRunawaySampleMs != temps.lastUpdateMs() && temps.lastUpdateMs() != 0) {
       _lastRunawaySampleMs = temps.lastUpdateMs();
       pushRunawaySample(_lastRunawaySampleMs, _controlTempC);
@@ -463,15 +468,26 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
       const TempSample& newest = _runawaySamples[newestIdx];
       const float dtMin = (newest.ms - oldest.ms) / 60000.0f;
       if (dtMin > 0.0f) {
-        const float rate = (newest.tempC - oldest.tempC) / dtMin;
-        if (rate > _cfg.runawayRateCPerMin) {
-          setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
-        }
+        runawayRate = (newest.tempC - oldest.tempC) / dtMin;
+        runawayRateValid = true;
       }
+    }
+  }
+
+  if (_runawayWaitForCooling && runawayRateValid && runawayRate < 0.0f) {
+    _runawayWaitForCooling = false;
+  }
+
+  const bool runawayGraceActive = (_lastModeChangeMs != 0) && ((nowMs - _lastModeChangeMs) < kRunawayModeChangeGraceMs);
+  if (_cfg.runawayEnable && !runawayGraceActive && !_runawayWaitForCooling && _controlTempValid && _appliedPct > 0.0f) {
+    if (runawayRateValid && runawayRate > _cfg.runawayRateCPerMin) {
+      setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
     }
 
     if (_effectiveMode != ControlMode::MANUAL) {
-      if (_controlTempC > (_targetC + _cfg.runawayMarginC)) {
+      // Ignore pure overshoot when the pack is already cooling down.
+      if ((!runawayRateValid || runawayRate >= 0.0f) &&
+          _controlTempC > (_targetC + _cfg.runawayMarginC)) {
         setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
       }
     }
@@ -536,7 +552,17 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
   }
 
   ControlMode baseMode = _requestedMode;
-  _effectiveMode = applyModeOverrides(nowMs, mqtt, baseMode);
+  ControlMode newMode = applyModeOverrides(nowMs, mqtt, baseMode);
+  if (newMode != _effectiveMode) {
+    const float oldTarget = _targetC;
+    const float newTarget = computeTarget(newMode);
+    _lastModeChangeMs = nowMs;
+    _runawayWaitForCooling = newTarget < oldTarget;
+    _runawayCount = 0;
+    _runawayHead = 0;
+    _lastRunawaySampleMs = 0;
+  }
+  _effectiveMode = newMode;
 
   _targetC = computeTarget(_effectiveMode);
   if (_overrideActive) {

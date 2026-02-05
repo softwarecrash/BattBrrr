@@ -2,14 +2,20 @@
 
 #include <algorithm>
 
+#include "ControlProfile.h"
 #include "GpioValidator.h"
 #include "MqttBridge.h"
 #include "TempManager.h"
+#include "WebSerial.h"
 
 namespace {
 constexpr uint8_t kPwmChannel = 0;
 constexpr uint8_t kRunawayMaxSamples = 12;
 constexpr uint32_t kRunawayModeChangeGraceMs = 60000;
+constexpr uint32_t kPidControlIntervalMs = 250;
+constexpr float kPidLookaheadS = 20.0f;
+constexpr float kPidLookaheadMaxDeltaC = 2.0f;
+constexpr float kPidSlopeFilter = 0.85f;
 }  // namespace
 
 HeaterController::HeaterController()
@@ -31,6 +37,9 @@ HeaterController::HeaterController()
     _pidIntegral(0.0f),
     _pidLastError(0.0f),
     _pidLastDeriv(0.0f),
+    _pidLastTempC(NAN),
+    _pidTempSlopeCps(0.0f),
+    _pidTempSlopeValid(false),
     _lastControlMs(0),
     _hystState(false),
     _lastModeChangeMs(0),
@@ -258,20 +267,48 @@ float HeaterController::computeTarget(ControlMode mode) const {
 }
 
 float HeaterController::computeOutputPid(uint32_t nowMs, float targetC, float tempC) {
-  float error = targetC - tempC;
   float dt = (nowMs - _lastControlMs) / 1000.0f;
   if (_lastControlMs == 0 || dt <= 0.0f) dt = 0.1f;
   _lastControlMs = nowMs;
 
-  _pidIntegral += error * dt;
-  if (_pidIntegral > _cfg.pidIntegralLimit) _pidIntegral = _cfg.pidIntegralLimit;
-  if (_pidIntegral < -_cfg.pidIntegralLimit) _pidIntegral = -_cfg.pidIntegralLimit;
+  float rawSlopeCps = 0.0f;
+  if (_pidTempSlopeValid) {
+    rawSlopeCps = (tempC - _pidLastTempC) / dt;
+    _pidTempSlopeCps = (_pidTempSlopeCps * kPidSlopeFilter) + (rawSlopeCps * (1.0f - kPidSlopeFilter));
+  } else {
+    _pidTempSlopeCps = 0.0f;
+    _pidTempSlopeValid = true;
+  }
+  _pidLastTempC = tempC;
 
-  float deriv = (error - _pidLastError) / dt;
+  float lookaheadDeltaC = _pidTempSlopeCps * kPidLookaheadS;
+  if (lookaheadDeltaC > kPidLookaheadMaxDeltaC) lookaheadDeltaC = kPidLookaheadMaxDeltaC;
+  if (lookaheadDeltaC < -kPidLookaheadMaxDeltaC) lookaheadDeltaC = -kPidLookaheadMaxDeltaC;
+  const float predictedTempC = tempC + lookaheadDeltaC;
+  const float error = targetC - predictedTempC;
+
+  const float deriv = (error - _pidLastError) / dt;
   _pidLastError = error;
   _pidLastDeriv = (_pidLastDeriv * _cfg.pidDerivFilter) + (deriv * (1.0f - _cfg.pidDerivFilter));
 
-  float output = (_cfg.pidKp * error) + (_cfg.pidKi * _pidIntegral) + (_cfg.pidKd * _pidLastDeriv);
+  const float pTerm = _cfg.pidKp * error;
+  const float dTerm = _cfg.pidKd * _pidLastDeriv;
+  float iTerm = _cfg.pidKi * _pidIntegral;
+  float output = pTerm + iTerm + dTerm;
+
+  const float clamped = clampOutput(output);
+  const bool atHighLimit = clamped >= _cfg.maxOutputPct && output > clamped;
+  const bool atLowLimit = clamped <= 0.0f && output < clamped;
+  const bool wouldWindUp = (atHighLimit && error > 0.0f) || (atLowLimit && error < 0.0f);
+
+  if (!wouldWindUp) {
+    _pidIntegral += error * dt;
+    if (_pidIntegral > _cfg.pidIntegralLimit) _pidIntegral = _cfg.pidIntegralLimit;
+    if (_pidIntegral < -_cfg.pidIntegralLimit) _pidIntegral = -_cfg.pidIntegralLimit;
+    iTerm = _cfg.pidKi * _pidIntegral;
+    output = pTerm + iTerm + dTerm;
+  }
+
   return output;
 }
 
@@ -310,6 +347,23 @@ void HeaterController::updateOutput(uint32_t nowMs, float desiredPct) {
   if (requestEnabled != _outputEnabled) {
     _outputEnabled = requestEnabled;
     _outputLastChangeMs = nowMs;
+  }
+
+  const bool rampWindowActive = (_lastModeChangeMs != 0) &&
+                                ((nowMs - _lastModeChangeMs) < ControlProfile::kHeatRampMs);
+  const bool applyStartRamp = requestEnabled &&
+                              rampWindowActive &&
+                              !_testActive &&
+                              _effectiveMode != ControlMode::MANUAL &&
+                              (_cfg.algorithm == ControlAlgorithm::PID || _overrideActive);
+  if (applyStartRamp) {
+    const float startPct = min(_cfg.maxOutputPct, ControlProfile::kHeatStartPct);
+    if (pct > startPct && _outputEnabled && ControlProfile::kHeatRampMs > 0) {
+      const uint32_t rampMs = nowMs - _lastModeChangeMs;
+      const float t = static_cast<float>(rampMs) / static_cast<float>(ControlProfile::kHeatRampMs);
+      const float capPct = startPct + ((_cfg.maxOutputPct - startPct) * t);
+      if (pct > capPct) pct = capPct;
+    }
   }
 
   _appliedPct = pct;
@@ -481,6 +535,8 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
   const bool runawayGraceActive = (_lastModeChangeMs != 0) && ((nowMs - _lastModeChangeMs) < kRunawayModeChangeGraceMs);
   if (_cfg.runawayEnable && !runawayGraceActive && !_runawayWaitForCooling && _controlTempValid && _appliedPct > 0.0f) {
     if (runawayRateValid && runawayRate > _cfg.runawayRateCPerMin) {
+      webSerial.printf("[RUNAWAY] TRIGGER rate=%.3f limit=%.3f temp=%.2f target=%.2f applied=%.1f\n",
+                       runawayRate, _cfg.runawayRateCPerMin, _controlTempC, _targetC, _appliedPct);
       setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
     }
 
@@ -488,6 +544,11 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
       // Ignore pure overshoot when the pack is already cooling down.
       if ((!runawayRateValid || runawayRate >= 0.0f) &&
           _controlTempC > (_targetC + _cfg.runawayMarginC)) {
+        webSerial.printf("[RUNAWAY] TRIGGER overshoot temp=%.2f target=%.2f margin=%.2f rate=%s%.3f applied=%.1f\n",
+                         _controlTempC, _targetC, _cfg.runawayMarginC,
+                         runawayRateValid ? "" : "n/a ",
+                         runawayRateValid ? runawayRate : 0.0f,
+                         _appliedPct);
         setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
       }
     }
@@ -577,6 +638,10 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
     _pidIntegral = 0.0f;
     _pidLastError = 0.0f;
     _pidLastDeriv = 0.0f;
+    _lastControlMs = 0;
+    _pidLastTempC = NAN;
+    _pidTempSlopeCps = 0.0f;
+    _pidTempSlopeValid = false;
     _hystState = false;
     updateOutput(nowMs, 0.0f);
     return;
@@ -591,18 +656,57 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
     _pidIntegral = 0.0f;
     _pidLastError = 0.0f;
     _pidLastDeriv = 0.0f;
+    _lastControlMs = 0;
+    _pidLastTempC = NAN;
+    _pidTempSlopeCps = 0.0f;
+    _pidTempSlopeValid = false;
     _hystState = false;
     desiredPct = _overrideOutputPct;
   } else if (_testActive) {
+    _pidIntegral = 0.0f;
+    _pidLastError = 0.0f;
+    _pidLastDeriv = 0.0f;
+    _lastControlMs = 0;
+    _pidLastTempC = NAN;
+    _pidTempSlopeCps = 0.0f;
+    _pidTempSlopeValid = false;
+    _hystState = false;
     desiredPct = _testPct;
   } else if (_effectiveMode == ControlMode::MANUAL) {
+    _pidIntegral = 0.0f;
+    _pidLastError = 0.0f;
+    _pidLastDeriv = 0.0f;
+    _lastControlMs = 0;
+    _pidLastTempC = NAN;
+    _pidTempSlopeCps = 0.0f;
+    _pidTempSlopeValid = false;
+    _hystState = false;
     desiredPct = _cfg.manualOutputPct;
   } else if (_controlTempValid) {
     if (_cfg.algorithm == ControlAlgorithm::PID) {
-      desiredPct = computeOutputPid(nowMs, _targetC, _controlTempC);
+      if (_lastControlMs == 0 || (nowMs - _lastControlMs) >= kPidControlIntervalMs) {
+        desiredPct = computeOutputPid(nowMs, _targetC, _controlTempC);
+      } else {
+        desiredPct = _outputPct;
+      }
     } else {
+      _pidIntegral = 0.0f;
+      _pidLastError = 0.0f;
+      _pidLastDeriv = 0.0f;
+      _lastControlMs = 0;
+      _pidLastTempC = NAN;
+      _pidTempSlopeCps = 0.0f;
+      _pidTempSlopeValid = false;
       desiredPct = computeOutputHysteresis(_targetC, _controlTempC);
     }
+  } else {
+    _pidIntegral = 0.0f;
+    _pidLastError = 0.0f;
+    _pidLastDeriv = 0.0f;
+    _lastControlMs = 0;
+    _pidLastTempC = NAN;
+    _pidTempSlopeCps = 0.0f;
+    _pidTempSlopeValid = false;
   }
 
   _outputPct = clampOutput(desiredPct);

@@ -4,14 +4,13 @@
 #include <algorithm>
 #include <math.h>
 
+#include "ControlProfile.h"
 #include "HeaterController.h"
 #include "SettingsPrefs.h"
 #include "TempManager.h"
 
 namespace {
-constexpr float kProbeStartPct = 20.0f;
 constexpr float kProbeStepPct = 10.0f;
-constexpr float kProbeMaxPct = 60.0f;
 constexpr uint32_t kProbeWindowStartMs = 120000;
 constexpr uint32_t kProbeWindowStepMs = 120000;
 constexpr uint32_t kProbeWindowMaxMs = 600000;
@@ -138,10 +137,11 @@ bool PidAutotune::start(bool autoSave, Aggressiveness aggr, uint32_t maxDuration
   _targetC = target;
 
   const float maxOut = _settings->get.maxOutputPct();
-  _probeOutputPct = kProbeStartPct;
-  if (_probeOutputPct > maxOut) _probeOutputPct = maxOut;
-  _probeMaxOutputPct = kProbeMaxPct;
-  if (_probeMaxOutputPct > maxOut) _probeMaxOutputPct = maxOut;
+  _probeOutputPct = min(maxOut, ControlProfile::kHeatStartPct);
+  _probeMaxOutputPct = maxOut;
+  if (_probeMaxOutputPct < _probeOutputPct) {
+    _probeMaxOutputPct = _probeOutputPct;
+  }
 
   _probeWindowMs = kProbeWindowStartMs;
   _probeWindowMaxMs = kProbeWindowMaxMs;

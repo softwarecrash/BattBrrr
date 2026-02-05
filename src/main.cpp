@@ -26,7 +26,7 @@ void setup() {
 #ifdef WSL_CUSTOM_PAGE
   webSerial.setCustomHtmlPage(webserialHtml(), webserialHtmlLen(), "gzip");
 #endif
-  webSerial.begin(&server, 115200, 200);
+  webSerial.begin(&server, 115200, 2048);
 
   settings.begin();
   webSerial.setAuthentication(settings.get.webUIuser(), settings.get.webUIPass());

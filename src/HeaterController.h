@@ -158,6 +158,9 @@ private:
   float _pidIntegral;
   float _pidLastError;
   float _pidLastDeriv;
+  float _pidLastTempC;
+  float _pidTempSlopeCps;
+  bool _pidTempSlopeValid;
   uint32_t _lastControlMs;
   bool _hystState;
   uint32_t _lastModeChangeMs;

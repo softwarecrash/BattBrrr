@@ -768,8 +768,28 @@
       }
     });
 
-    document.getElementById("exportConfigBtn").addEventListener("click", () => {
-      window.location.href = "/config/backup";
+    document.getElementById("exportConfigBtn").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/config/backup");
+        if (!res.ok) {
+          alertToast("error", "Export failed.");
+          return;
+        }
+        const blob = await res.blob();
+        const cd = res.headers.get("content-disposition") || "";
+        const match = cd.match(/filename=([^;]+)/i);
+        const fileName = match ? match[1].replace(/["']/g, "").trim() : "battbrrr-backup.json";
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        alertToast("error", "Export failed.");
+      }
     });
 
     document.getElementById("importBtn").addEventListener("click", async () => {
@@ -781,7 +801,7 @@
       }
       try {
         const text = await file.text();
-        const res = await fetch("/config/restore", {
+        const res = await fetch("/api/config/restore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: text

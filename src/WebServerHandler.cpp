@@ -634,7 +634,7 @@ void WebServerHandler::begin() {
     req->send(ok ? 200 : 400, "application/json", ok ? "{\"success\":true}" : "{\"success\":false}");
   });
 
-  server.on("/config/backup", HTTP_GET, [&](AsyncWebServerRequest* req) {
+  server.on("/api/config/backup", HTTP_GET, [&](AsyncWebServerRequest* req) {
     if (!wifiManager.isApMode()) {
       if (!isAuthorized(req)) return req->requestAuthentication();
     }
@@ -646,7 +646,7 @@ void WebServerHandler::begin() {
     req->send(r);
   });
 
-  server.on("/config/restore", HTTP_POST,
+  server.on("/api/config/restore", HTTP_POST,
     [&](AsyncWebServerRequest* req) {
       if (!wifiManager.isApMode()) {
         if (!isAuthorized(req)) {

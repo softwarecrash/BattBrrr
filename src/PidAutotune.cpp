@@ -23,6 +23,7 @@ constexpr float kFastRateCap = 0.60f;
 constexpr float kSlowRateMin = 0.01f;
 
 constexpr float kQualityThreshold = 0.55f;
+constexpr uint32_t kQualityStallMs = 600000;
 }  // namespace
 
 PidAutotune::PidAutotune()
@@ -43,6 +44,10 @@ PidAutotune::PidAutotune()
     _samplePeriodMs(2000),
     _requiredCycles(6),
     _measuredRateCPerMin(NAN),
+    _bestQuality(-1.0f),
+    _bestKu(NAN),
+    _bestPu(NAN),
+    _lastQualityImproveMs(0),
     _probeOutputPct(0.0f),
     _probeMaxOutputPct(0.0f),
     _probeWindowMs(kProbeWindowStartMs),
@@ -88,6 +93,10 @@ void PidAutotune::reset() {
   _prevSlope = 0.0f;
   _prevMs = 0;
   _hasPrev = false;
+  _bestQuality = -1.0f;
+  _bestKu = NAN;
+  _bestPu = NAN;
+  _lastQualityImproveMs = 0;
   clearOverride();
 }
 
@@ -313,6 +322,17 @@ void PidAutotune::handleTune(uint32_t nowMs, float tempC) {
   float period = NAN;
   float quality = 0.0f;
   bool ok = computeKuPu(&ku, &pu, &amp, &period, &quality);
+  if (ok) {
+    if (_lastQualityImproveMs == 0) {
+      _lastQualityImproveMs = nowMs;
+    }
+    if (_bestQuality < 0.0f || quality > (_bestQuality + 0.01f)) {
+      _bestQuality = quality;
+      _bestKu = ku;
+      _bestPu = pu;
+      _lastQualityImproveMs = nowMs;
+    }
+  }
 
   const uint32_t elapsedS = (nowMs - _startMs) / 1000UL;
   if (_maxDurationS > 0 && elapsedS >= _maxDurationS) {
@@ -337,6 +357,22 @@ void PidAutotune::handleTune(uint32_t nowMs, float tempC) {
     _result.quality = quality * 100.0f;
     computePidFromKuPu(ku, pu);
     finish();
+    return;
+  }
+
+  if (ok && cycles >= _requiredCycles && _lastQualityImproveMs != 0) {
+    if ((nowMs - _lastQualityImproveMs) >= kQualityStallMs) {
+      const float useKu = isfinite(_bestKu) ? _bestKu : ku;
+      const float usePu = isfinite(_bestPu) ? _bestPu : pu;
+      const float useQuality = (_bestQuality >= 0.0f) ? _bestQuality : quality;
+      _result.ku = useKu;
+      _result.pu = usePu;
+      _result.quality = useQuality * 100.0f;
+      computePidFromKuPu(useKu, usePu);
+      _lastError = "QUALITY_STALLED";
+      finish();
+      return;
+    }
   }
 }
 

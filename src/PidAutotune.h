@@ -119,6 +119,10 @@ private:
   uint8_t _requiredCycles;
   float _measuredRateCPerMin;
   String _lastError;
+  float _bestQuality;
+  float _bestKu;
+  float _bestPu;
+  uint32_t _lastQualityImproveMs;
 
   // Probe parameters
   float _probeOutputPct;

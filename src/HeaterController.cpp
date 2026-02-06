@@ -13,6 +13,7 @@ constexpr uint8_t kPwmChannel = 0;
 constexpr uint8_t kRunawayMaxSamples = 12;
 constexpr uint32_t kRunawayModeChangeGraceMs = 60000;
 constexpr uint32_t kPidControlIntervalMs = 250;
+constexpr uint32_t kRunawayOvershootHoldMs = 15000;
 constexpr float kPidLookaheadS = 20.0f;
 constexpr float kPidLookaheadMaxDeltaC = 2.0f;
 constexpr float kPidSlopeFilter = 0.85f;
@@ -57,6 +58,7 @@ HeaterController::HeaterController()
     _stuckActive(false),
     _stuckStartMs(0),
     _stuckStartTemp(0.0f),
+    _runawayOvershootStartMs(0),
     _runawayCount(0),
     _runawayHead(0),
     _lastRunawaySampleMs(0),
@@ -544,14 +546,22 @@ void HeaterController::updateFaults(uint32_t nowMs, TempManager& temps, MqttBrid
       // Ignore pure overshoot when the pack is already cooling down.
       if ((!runawayRateValid || runawayRate >= 0.0f) &&
           _controlTempC > (_targetC + _cfg.runawayMarginC)) {
-        webSerial.printf("[RUNAWAY] TRIGGER overshoot temp=%.2f target=%.2f margin=%.2f rate=%s%.3f applied=%.1f\n",
-                         _controlTempC, _targetC, _cfg.runawayMarginC,
-                         runawayRateValid ? "" : "n/a ",
-                         runawayRateValid ? runawayRate : 0.0f,
-                         _appliedPct);
-        setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
+        if (_runawayOvershootStartMs == 0) {
+          _runawayOvershootStartMs = nowMs;
+        } else if ((nowMs - _runawayOvershootStartMs) >= kRunawayOvershootHoldMs) {
+          webSerial.printf("[RUNAWAY] TRIGGER overshoot temp=%.2f target=%.2f margin=%.2f rate=%s%.3f applied=%.1f\n",
+                           _controlTempC, _targetC, _cfg.runawayMarginC,
+                           runawayRateValid ? "" : "n/a ",
+                           runawayRateValid ? runawayRate : 0.0f,
+                           _appliedPct);
+          setFault(FaultCode::THERMAL_RUNAWAY, _cfg.runawayLatch, nowMs);
+        }
+      } else {
+        _runawayOvershootStartMs = 0;
       }
     }
+  } else {
+    _runawayOvershootStartMs = 0;
   }
 
   if (_resetFaultsRequested) {

@@ -182,6 +182,7 @@ private:
   bool _stuckActive;
   uint32_t _stuckStartMs;
   float _stuckStartTemp;
+  uint32_t _runawayOvershootStartMs;
 
   TempSample _runawaySamples[12];
   uint8_t _runawayCount;

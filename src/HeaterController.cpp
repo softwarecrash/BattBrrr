@@ -619,6 +619,15 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
     const float newTarget = computeTarget(newMode);
     _lastModeChangeMs = nowMs;
     _runawayWaitForCooling = newTarget < oldTarget;
+    if (newTarget < oldTarget) {
+      _pidIntegral = 0.0f;
+      _pidLastError = 0.0f;
+      _pidLastDeriv = 0.0f;
+      _lastControlMs = 0;
+      _pidLastTempC = NAN;
+      _pidTempSlopeCps = 0.0f;
+      _pidTempSlopeValid = false;
+    }
     _runawayCount = 0;
     _runawayHead = 0;
     _lastRunawaySampleMs = 0;

@@ -246,15 +246,15 @@ void PidAutotune::handleProbe(uint32_t nowMs, float tempC) {
   }
 
   if ((nowMs - _probeLastAdjustMs) >= _probeWindowMs) {
-    if (_probeWindowMs < _probeWindowMaxMs) {
-      _probeWindowMs = min(_probeWindowMs + _probeWindowStepMs, _probeWindowMaxMs);
+    if ((_probeOutputPct + kProbeStepPct) <= _probeMaxOutputPct) {
+      _probeOutputPct += kProbeStepPct;
       _probeLastAdjustMs = nowMs;
       _sampleCount = 0;
       _sampleHead = 0;
       return;
     }
-    if ((_probeOutputPct + kProbeStepPct) <= _probeMaxOutputPct) {
-      _probeOutputPct += kProbeStepPct;
+    if (_probeWindowMs < _probeWindowMaxMs) {
+      _probeWindowMs = min(_probeWindowMs + _probeWindowStepMs, _probeWindowMaxMs);
       _probeLastAdjustMs = nowMs;
       _sampleCount = 0;
       _sampleHead = 0;

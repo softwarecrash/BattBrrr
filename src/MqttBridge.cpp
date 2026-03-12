@@ -462,6 +462,14 @@ bool MqttBridge::extractJsonPath(const String& payload, const String& path, Stri
 ControlMode MqttBridge::modeFromPayload(const String& payload) const {
   String v = payload;
   v.trim();
+  if (v.length() >= 2) {
+    const char first = v[0];
+    const char last = v[v.length() - 1];
+    if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+      v = v.substring(1, v.length() - 1);
+      v.trim();
+    }
+  }
   v.toLowerCase();
   if (v == "charge" || v == "charging") return ControlMode::CHARGE;
   if (v == "discharge" || v == "discharging") return ControlMode::DISCHARGE;

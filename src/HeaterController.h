@@ -27,6 +27,7 @@ public:
 
   ControlMode requestedMode() const;
   ControlMode effectiveMode() const;
+  bool modeFromBms() const;
   bool enabledEffective() const;
   float targetC() const;
   float outputPct() const;
@@ -155,11 +156,6 @@ private:
   float _lastGoodControlTempC;
   uint32_t _lastGoodControlTempMs;
   bool _effectiveModeFromBms;
-  ControlMode _bmsAcceptedMode;
-  bool _bmsAcceptedValid;
-  ControlMode _bmsPendingMode;
-  bool _bmsPendingValid;
-  uint32_t _bmsPendingSinceMs;
   uint32_t _bmsHeatDemandSinceMs;
   bool _lastModeInputActive;
 

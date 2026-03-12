@@ -12,7 +12,6 @@ namespace {
 constexpr uint8_t kPwmChannel = 0;
 constexpr uint8_t kRunawayMaxSamples = 12;
 constexpr uint32_t kRunawayModeChangeGraceMs = 60000;
-constexpr uint32_t kBmsModeDebounceMs = 20000;
 constexpr uint32_t kBmsHeatEnableDelayMs = 60000;
 constexpr uint32_t kControlTempFreshMinMs = 5000;
 constexpr uint32_t kPidControlIntervalMs = 250;
@@ -39,11 +38,6 @@ HeaterController::HeaterController()
     _lastGoodControlTempC(NAN),
     _lastGoodControlTempMs(0),
     _effectiveModeFromBms(false),
-    _bmsAcceptedMode(ControlMode::IDLE),
-    _bmsAcceptedValid(false),
-    _bmsPendingMode(ControlMode::IDLE),
-    _bmsPendingValid(false),
-    _bmsPendingSinceMs(0),
     _bmsHeatDemandSinceMs(0),
     _lastModeInputActive(false),
     _pidIntegral(0.0f),
@@ -248,31 +242,8 @@ ControlMode HeaterController::applyModeOverrides(uint32_t nowMs, MqttBridge& mqt
   _effectiveModeFromBms = false;
 
   if (mqtt.bmsModeValid(nowMs)) {
-    const ControlMode rawBmsMode = mqtt.bmsMode();
-    if (!_bmsPendingValid || rawBmsMode != _bmsPendingMode) {
-      _bmsPendingMode = rawBmsMode;
-      _bmsPendingValid = true;
-      _bmsPendingSinceMs = nowMs;
-    }
-
-    if (!_bmsAcceptedValid) {
-      if ((nowMs - _bmsPendingSinceMs) >= kBmsModeDebounceMs) {
-        _bmsAcceptedMode = rawBmsMode;
-        _bmsAcceptedValid = true;
-      }
-    } else if (rawBmsMode != _bmsAcceptedMode &&
-               (nowMs - _bmsPendingSinceMs) >= kBmsModeDebounceMs) {
-      _bmsAcceptedMode = rawBmsMode;
-    }
-
-    if (_bmsAcceptedValid) {
-      mode = _bmsAcceptedMode;
-      _effectiveModeFromBms = true;
-    }
-  } else {
-    _bmsAcceptedValid = false;
-    _bmsPendingValid = false;
-    _bmsPendingSinceMs = 0;
+    mode = mqtt.bmsMode();
+    _effectiveModeFromBms = true;
   }
 
   if (_manualInput.isActive()) {
@@ -825,6 +796,10 @@ ControlMode HeaterController::requestedMode() const {
 
 ControlMode HeaterController::effectiveMode() const {
   return _effectiveMode;
+}
+
+bool HeaterController::modeFromBms() const {
+  return _effectiveModeFromBms;
 }
 
 bool HeaterController::enabledEffective() const {

@@ -34,6 +34,13 @@ String buildStatusJson(const StatusContext& ctx) {
     mqtt["connected"] = ctx.mqtt->isConnected();
     mqtt["timed_out"] = ctx.mqtt->isTimedOut(nowMs);
     mqtt["last_rx_ms"] = ctx.mqtt->lastRxMs();
+    const bool bmsModeValid = ctx.mqtt->bmsModeValid(nowMs);
+    mqtt["bms_mode_valid"] = bmsModeValid;
+    if (bmsModeValid) {
+      mqtt["bms_mode"] = modeToString(ctx.mqtt->bmsMode());
+    } else {
+      mqtt["bms_mode"] = nullptr;
+    }
   }
 
   JsonObject temps = doc["temps"].to<JsonObject>();
@@ -79,6 +86,7 @@ String buildStatusJson(const StatusContext& ctx) {
     controller["enabled"] = ctx.heater->enabledEffective();
     controller["requested_mode"] = modeToString(ctx.heater->requestedMode());
     controller["mode"] = modeToString(ctx.heater->effectiveMode());
+    controller["mode_source"] = ctx.heater->modeFromBms() ? "bms" : "local";
     controller["target_c"] = ctx.heater->targetC();
     controller["output_pct"] = ctx.heater->outputPct();
     controller["heater_on"] = ctx.heater->heaterOn();

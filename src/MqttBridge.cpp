@@ -269,11 +269,15 @@ void MqttBridge::handleMessage(char* topic, uint8_t* payload, unsigned int lengt
     String extracted;
     if (extractJsonPath(payloadStr, _bmsStatePath, &extracted)) {
       ControlMode mode = modeFromPayload(extracted);
-      if (mode != ControlMode::FAULT) {
+      const bool allowedBmsMode = (mode == ControlMode::IDLE) ||
+                                  (mode == ControlMode::CHARGE) ||
+                                  (mode == ControlMode::DISCHARGE) ||
+                                  (mode == ControlMode::FROST_PROTECT);
+      if (allowedBmsMode) {
         _bmsMode = mode;
         _bmsModeValid = true;
         _lastBmsStateUpdateMs = millis();
-      } else {
+      } else if (mode == ControlMode::FAULT) {
         _bmsModeValid = false;
       }
     }

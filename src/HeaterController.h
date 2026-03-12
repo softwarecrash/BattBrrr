@@ -90,6 +90,7 @@ private:
     float maxOutputPct;
     uint32_t minOnMs;
     uint32_t minOffMs;
+    uint32_t sensorPollMs;
     float maxTempC;
     float maxDeltaC;
     float stuckOnPct;
@@ -153,6 +154,13 @@ private:
   bool _controlTempStale;
   float _lastGoodControlTempC;
   uint32_t _lastGoodControlTempMs;
+  bool _effectiveModeFromBms;
+  ControlMode _bmsAcceptedMode;
+  bool _bmsAcceptedValid;
+  ControlMode _bmsPendingMode;
+  bool _bmsPendingValid;
+  uint32_t _bmsPendingSinceMs;
+  uint32_t _bmsHeatDemandSinceMs;
   bool _lastModeInputActive;
 
   float _pidIntegral;

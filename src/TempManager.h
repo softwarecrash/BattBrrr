@@ -20,6 +20,11 @@ public:
     bool present;
     bool valid;
     float tempC;
+    float rawSamplesC[3];
+    uint8_t rawSampleCount;
+    uint8_t rawSampleIndex;
+    bool emaValid;
+    float emaTempC;
     uint32_t errorStreak;
     uint32_t errorTotal;
     uint32_t lastReadMs;

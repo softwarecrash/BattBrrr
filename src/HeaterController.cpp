@@ -12,11 +12,15 @@ namespace {
 constexpr uint8_t kPwmChannel = 0;
 constexpr uint8_t kRunawayMaxSamples = 12;
 constexpr uint32_t kRunawayModeChangeGraceMs = 60000;
+constexpr uint32_t kBmsModeDebounceMs = 20000;
+constexpr uint32_t kBmsHeatEnableDelayMs = 60000;
+constexpr uint32_t kControlTempFreshMinMs = 5000;
 constexpr uint32_t kPidControlIntervalMs = 250;
 constexpr uint32_t kRunawayOvershootHoldMs = 15000;
 constexpr float kPidLookaheadS = 20.0f;
 constexpr float kPidLookaheadMaxDeltaC = 2.0f;
 constexpr float kPidSlopeFilter = 0.85f;
+constexpr float kPidDeadbandC = 0.15f;
 }  // namespace
 
 HeaterController::HeaterController()
@@ -34,6 +38,13 @@ HeaterController::HeaterController()
     _controlTempStale(false),
     _lastGoodControlTempC(NAN),
     _lastGoodControlTempMs(0),
+    _effectiveModeFromBms(false),
+    _bmsAcceptedMode(ControlMode::IDLE),
+    _bmsAcceptedValid(false),
+    _bmsPendingMode(ControlMode::IDLE),
+    _bmsPendingValid(false),
+    _bmsPendingSinceMs(0),
+    _bmsHeatDemandSinceMs(0),
     _lastModeInputActive(false),
     _pidIntegral(0.0f),
     _pidLastError(0.0f),
@@ -104,6 +115,7 @@ void HeaterController::applySettings(Settings& settings) {
   _cfg.maxOutputPct = settings.get.maxOutputPct();
   _cfg.minOnMs = settings.get.minOnMs();
   _cfg.minOffMs = settings.get.minOffMs();
+  _cfg.sensorPollMs = settings.get.sensorPollMs();
   _cfg.maxTempC = settings.get.maxTempC();
   _cfg.maxDeltaC = settings.get.maxDeltaC();
   _cfg.stuckOnPct = settings.get.stuckOnPct();
@@ -233,20 +245,48 @@ void HeaterController::updateInputs(uint32_t nowMs) {
 
 ControlMode HeaterController::applyModeOverrides(uint32_t nowMs, MqttBridge& mqtt, ControlMode baseMode) {
   ControlMode mode = baseMode;
+  _effectiveModeFromBms = false;
 
   if (mqtt.bmsModeValid(nowMs)) {
-    mode = mqtt.bmsMode();
+    const ControlMode rawBmsMode = mqtt.bmsMode();
+    if (!_bmsPendingValid || rawBmsMode != _bmsPendingMode) {
+      _bmsPendingMode = rawBmsMode;
+      _bmsPendingValid = true;
+      _bmsPendingSinceMs = nowMs;
+    }
+
+    if (!_bmsAcceptedValid) {
+      if ((nowMs - _bmsPendingSinceMs) >= kBmsModeDebounceMs) {
+        _bmsAcceptedMode = rawBmsMode;
+        _bmsAcceptedValid = true;
+      }
+    } else if (rawBmsMode != _bmsAcceptedMode &&
+               (nowMs - _bmsPendingSinceMs) >= kBmsModeDebounceMs) {
+      _bmsAcceptedMode = rawBmsMode;
+    }
+
+    if (_bmsAcceptedValid) {
+      mode = _bmsAcceptedMode;
+      _effectiveModeFromBms = true;
+    }
+  } else {
+    _bmsAcceptedValid = false;
+    _bmsPendingValid = false;
+    _bmsPendingSinceMs = 0;
   }
 
   if (_manualInput.isActive()) {
     mode = ControlMode::MANUAL;
+    _effectiveModeFromBms = false;
   }
 
   if (_cfg.mqttLossMode != FailsafeMode::KEEP_LAST_SAFE && mqtt.isTimedOut(nowMs)) {
     if (_cfg.mqttLossMode == FailsafeMode::IDLE) {
       mode = ControlMode::IDLE;
+      _effectiveModeFromBms = false;
     } else if (_cfg.mqttLossMode == FailsafeMode::FROST_PROTECT) {
       mode = _cfg.frostEnable ? ControlMode::FROST_PROTECT : ControlMode::IDLE;
+      _effectiveModeFromBms = false;
     }
   }
 
@@ -654,6 +694,7 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
   if (!_enabledEffective || faulted) {
     _effectiveMode = faulted ? ControlMode::FAULT : _effectiveMode;
     _outputPct = 0.0f;
+    _bmsHeatDemandSinceMs = 0;
     _pidIntegral = 0.0f;
     _pidLastError = 0.0f;
     _pidLastDeriv = 0.0f;
@@ -671,6 +712,20 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
   }
 
   float desiredPct = 0.0f;
+  bool controlTempFresh = false;
+  if (_controlTempValid) {
+    if (_usingBmsFallback) {
+      // Freshness is already enforced by MqttBridge::bmsTempValid().
+      controlTempFresh = !_controlTempStale;
+    } else {
+      const uint32_t maxAgeMs = max(kControlTempFreshMinMs, (_cfg.sensorPollMs * 3UL) + 1500UL);
+      const uint32_t lastTempMs = temps.lastUpdateMs();
+      controlTempFresh = !_controlTempStale &&
+                         lastTempMs != 0 &&
+                         (nowMs - lastTempMs) <= maxAgeMs;
+    }
+  }
+
   if (_overrideActive) {
     _pidIntegral = 0.0f;
     _pidLastError = 0.0f;
@@ -701,9 +756,19 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
     _pidTempSlopeValid = false;
     _hystState = false;
     desiredPct = _cfg.manualOutputPct;
-  } else if (_controlTempValid) {
+  } else if (_controlTempValid && controlTempFresh) {
     if (_cfg.algorithm == ControlAlgorithm::PID) {
-      if (_lastControlMs == 0 || (nowMs - _lastControlMs) >= kPidControlIntervalMs) {
+      const float tempError = _targetC - _controlTempC;
+      if (fabsf(tempError) <= kPidDeadbandC) {
+        _pidIntegral = 0.0f;
+        _pidLastError = 0.0f;
+        _pidLastDeriv = 0.0f;
+        _lastControlMs = 0;
+        _pidLastTempC = NAN;
+        _pidTempSlopeCps = 0.0f;
+        _pidTempSlopeValid = false;
+        desiredPct = 0.0f;
+      } else if (_lastControlMs == 0 || (nowMs - _lastControlMs) >= kPidControlIntervalMs) {
         desiredPct = computeOutputPid(nowMs, _targetC, _controlTempC);
       } else {
         desiredPct = _outputPct;
@@ -729,6 +794,20 @@ void HeaterController::loop(uint32_t nowMs, TempManager& temps, MqttBridge& mqtt
   }
 
   _outputPct = clampOutput(desiredPct);
+  if (_effectiveModeFromBms && !_testActive && !_overrideActive && _effectiveMode != ControlMode::MANUAL) {
+    if (_outputPct > 0.0f) {
+      if (_bmsHeatDemandSinceMs == 0) {
+        _bmsHeatDemandSinceMs = nowMs;
+      }
+      if (!_outputEnabled && (nowMs - _bmsHeatDemandSinceMs) < kBmsHeatEnableDelayMs) {
+        _outputPct = 0.0f;
+      }
+    } else {
+      _bmsHeatDemandSinceMs = 0;
+    }
+  } else {
+    _bmsHeatDemandSinceMs = 0;
+  }
   updateOutput(nowMs, _outputPct);
 }
 

@@ -8,6 +8,11 @@
 namespace {
 constexpr uint32_t kConversionMs12bit = 750;
 constexpr float kTempEmaAlpha = 0.2f;
+constexpr uint32_t kSensorInvalidHoldMs = 15000;
+
+float roundTempC(float value) {
+  return roundf(value * 100.0f) / 100.0f;
+}
 
 uint16_t conversionMsForResolution(uint8_t resBits) {
   switch (resBits) {
@@ -151,6 +156,8 @@ void TempManager::loop(uint32_t nowMs) {
           sensor.valid = false;
           sensor.tempC = NAN;
           resetFilterState(sensor);
+          sensor.lastGoodTempC = NAN;
+          sensor.lastGoodMs = 0;
           sensor.errorStreak = 0;
           sensor.errorTotal = 0;
           sensor.lastReadMs = 0;
@@ -199,9 +206,16 @@ void TempManager::readSensors(uint32_t nowMs) {
       sensor.errorStreak++;
       sensor.errorTotal++;
       if (sensor.errorStreak >= _errorLimit) {
-        sensor.valid = false;
-        sensor.tempC = NAN;
-        resetFilterState(sensor);
+        const bool holdValid = sensor.lastGoodMs != 0 &&
+                               (nowMs - sensor.lastGoodMs) <= kSensorInvalidHoldMs;
+        if (holdValid) {
+          sensor.valid = true;
+          sensor.tempC = sensor.lastGoodTempC;
+        } else {
+          sensor.valid = false;
+          sensor.tempC = NAN;
+          resetFilterState(sensor);
+        }
       }
     } else {
       sensor.errorStreak = 0;
@@ -223,7 +237,10 @@ void TempManager::readSensors(uint32_t nowMs) {
       }
 
       sensor.valid = true;
-      sensor.tempC = sensor.emaTempC;
+      sensor.tempC = roundTempC(sensor.emaTempC);
+      sensor.emaTempC = sensor.tempC;
+      sensor.lastGoodTempC = sensor.tempC;
+      sensor.lastGoodMs = nowMs;
     }
     sensor.lastReadMs = nowMs;
   }
@@ -265,6 +282,8 @@ bool TempManager::rescanNow(Settings& settings) {
         sensor.valid = false;
         sensor.tempC = NAN;
         resetFilterState(sensor);
+        sensor.lastGoodTempC = NAN;
+        sensor.lastGoodMs = 0;
         sensor.errorStreak = 0;
         sensor.errorTotal = 0;
         sensor.lastReadMs = 0;
@@ -291,6 +310,8 @@ void TempManager::updatePresence(const std::vector<String>& presentIds) {
     if (!present) {
       sensor.valid = false;
       sensor.tempC = NAN;
+      sensor.lastGoodTempC = NAN;
+      sensor.lastGoodMs = 0;
       resetFilterState(sensor);
     }
   }
@@ -362,6 +383,8 @@ void TempManager::applySensorOverrides(const String& json, Settings& settings) {
         sensor.rawSampleIndex = old.rawSampleIndex;
         sensor.emaValid = old.emaValid;
         sensor.emaTempC = old.emaTempC;
+        sensor.lastGoodTempC = old.lastGoodTempC;
+        sensor.lastGoodMs = old.lastGoodMs;
         sensor.errorStreak = old.errorStreak;
         sensor.errorTotal = old.errorTotal;
         sensor.lastReadMs = old.lastReadMs;
@@ -412,6 +435,8 @@ void TempManager::loadConfigFromJson(const String& json) {
     sensor.valid = false;
     sensor.tempC = NAN;
     resetFilterState(sensor);
+    sensor.lastGoodTempC = NAN;
+    sensor.lastGoodMs = 0;
     sensor.errorStreak = 0;
     sensor.errorTotal = 0;
     sensor.lastReadMs = 0;

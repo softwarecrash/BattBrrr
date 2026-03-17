@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 
+#include "ControlProfile.h"
 #include "HeaterController.h"
 #include "HeaterTypes.h"
 #include "MqttBridge.h"
@@ -89,6 +90,16 @@ String buildStatusJson(const StatusContext& ctx) {
     controller["mode_source"] = ctx.heater->modeFromBms() ? "bms" : "local";
     controller["target_c"] = ctx.heater->targetC();
     controller["output_pct"] = ctx.heater->outputPct();
+    controller["applied_pct"] = ctx.heater->appliedPct();
+    controller["output_enabled"] = ctx.heater->outputEnabled();
+    const uint32_t heatRampStartMs = ctx.heater->heatRampStartMs();
+    const uint32_t rampAgeMs = (heatRampStartMs != 0 && nowMs >= heatRampStartMs)
+                                   ? (nowMs - heatRampStartMs)
+                                   : 0;
+    const bool rampActive = heatRampStartMs != 0 &&
+                            rampAgeMs < ControlProfile::kHeatRampMs;
+    controller["ramp_active"] = rampActive;
+    controller["ramp_age_ms"] = rampActive ? rampAgeMs : 0;
     controller["heater_on"] = ctx.heater->heaterOn();
     if (ctx.heater->controlTempValid()) {
       controller["control_temp_c"] = ctx.heater->controlTempC();
@@ -96,7 +107,11 @@ String buildStatusJson(const StatusContext& ctx) {
       controller["control_temp_c"] = nullptr;
     }
     controller["control_temp_stale"] = ctx.heater->controlTempStale();
+    controller["control_temp_held"] = ctx.heater->controlTempHeld();
+    controller["control_temp_age_ms"] = ctx.heater->controlTempAgeMs();
     controller["using_bms"] = ctx.heater->usingBmsFallback();
+    controller["inhibit_reason"] = ctx.heater->inhibitReason();
+    controller["output_limit_reason"] = ctx.heater->outputLimitReason();
     const HeaterController::InputState inputs = ctx.heater->inputState();
     JsonObject input = controller["inputs"].to<JsonObject>();
     input["enable"] = inputs.enableActive;

@@ -25,6 +25,8 @@ public:
     uint8_t rawSampleIndex;
     bool emaValid;
     float emaTempC;
+    float lastGoodTempC;
+    uint32_t lastGoodMs;
     uint32_t errorStreak;
     uint32_t errorTotal;
     uint32_t lastReadMs;

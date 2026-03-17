@@ -31,11 +31,18 @@ public:
   bool enabledEffective() const;
   float targetC() const;
   float outputPct() const;
+  float appliedPct() const;
+  bool outputEnabled() const;
+  uint32_t heatRampStartMs() const;
   bool heaterOn() const;
   bool usingBmsFallback() const;
   float controlTempC() const;
   bool controlTempValid() const;
   bool controlTempStale() const;
+  bool controlTempHeld() const;
+  uint32_t controlTempAgeMs() const;
+  const char* inhibitReason() const;
+  const char* outputLimitReason() const;
 
   uint32_t faultMaskLatched() const;
   uint32_t faultMaskActive() const;
@@ -51,6 +58,22 @@ public:
   InputState inputState() const;
 
 private:
+  enum class InhibitReason : uint8_t {
+    NONE = 0,
+    CTRL_DISABLED,
+    CTRL_FAULT,
+    NO_CONTROL_TEMP,
+    PID_DEADBAND,
+    NO_HEAT_DEMAND
+  };
+
+  enum class OutputLimitReason : uint8_t {
+    NONE = 0,
+    MIN_OFF,
+    MIN_ON,
+    START_RAMP
+  };
+
   struct InputConfig {
     int32_t pin;
     InputPull pull;
@@ -91,7 +114,6 @@ private:
     float maxOutputPct;
     uint32_t minOnMs;
     uint32_t minOffMs;
-    uint32_t sensorPollMs;
     float maxTempC;
     float maxDeltaC;
     float stuckOnPct;
@@ -153,11 +175,14 @@ private:
   float _controlTempC;
   bool _controlTempValid;
   bool _controlTempStale;
+  bool _controlTempHeld;
+  uint32_t _controlTempAgeMs;
   float _lastGoodControlTempC;
   uint32_t _lastGoodControlTempMs;
   bool _effectiveModeFromBms;
-  uint32_t _bmsHeatDemandSinceMs;
   bool _lastModeInputActive;
+  InhibitReason _inhibitReason;
+  OutputLimitReason _outputLimitReason;
 
   float _pidIntegral;
   float _pidLastError;
@@ -165,12 +190,14 @@ private:
   float _pidLastTempC;
   float _pidTempSlopeCps;
   bool _pidTempSlopeValid;
+  bool _pidHeatDemandLatched;
   uint32_t _lastControlMs;
   bool _hystState;
   uint32_t _lastModeChangeMs;
   bool _runawayWaitForCooling;
 
   uint32_t _outputLastChangeMs;
+  uint32_t _heatRampStartMs;
   uint32_t _windowStartMs;
   uint8_t _pwmChannel;
   bool _outputConfigured;
